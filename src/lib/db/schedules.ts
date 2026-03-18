@@ -11,7 +11,7 @@ export async function getSchedulesByEquipment(equipmentId: string): Promise<PmSc
     .order('created_at')
 
   if (error) throw error
-  return data
+  return data as PmScheduleRow[]
 }
 
 export async function createSchedule(data: PmScheduleInsert): Promise<PmScheduleRow> {
@@ -19,12 +19,12 @@ export async function createSchedule(data: PmScheduleInsert): Promise<PmSchedule
 
   const { data: created, error } = await supabase
     .from('pm_schedules')
-    .insert(data)
+    .insert(data as never)
     .select()
     .single()
 
   if (error) throw error
-  return created
+  return created as PmScheduleRow
 }
 
 export async function updateSchedule(
@@ -35,13 +35,13 @@ export async function updateSchedule(
 
   const { data: updated, error } = await supabase
     .from('pm_schedules')
-    .update(data)
+    .update(data as never)
     .eq('id', id)
     .select()
     .single()
 
   if (error) throw error
-  return updated
+  return updated as PmScheduleRow
 }
 
 export async function deactivateSchedule(id: string): Promise<void> {
@@ -49,7 +49,7 @@ export async function deactivateSchedule(id: string): Promise<void> {
 
   const { error } = await supabase
     .from('pm_schedules')
-    .update({ active: false })
+    .update({ active: false } as never)
     .eq('id', id)
 
   if (error) throw error

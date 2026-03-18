@@ -1,0 +1,180 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { PmScheduleRow, PmFrequency, BillingType } from '@/types/database'
+
+const FREQUENCIES: { value: PmFrequency; label: string }[] = [
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'semi-annual', label: 'Semi-Annual' },
+  { value: 'annual', label: 'Annual' },
+]
+
+const BILLING_TYPES: { value: BillingType; label: string }[] = [
+  { value: 'flat_rate', label: 'Flat Rate' },
+  { value: 'time_and_materials', label: 'Time & Materials' },
+  { value: 'contract', label: 'Contract' },
+]
+
+interface ScheduleSectionProps {
+  equipmentId: string
+  schedule: PmScheduleRow | null
+}
+
+export default function ScheduleSection({ equipmentId, schedule }: ScheduleSectionProps) {
+  const router = useRouter()
+  const [editing, setEditing] = useState(!schedule)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [frequency, setFrequency] = useState<PmFrequency>(schedule?.frequency ?? 'quarterly')
+  const [billingType, setBillingType] = useState<BillingType>(schedule?.billing_type ?? 'flat_rate')
+  const [flatRate, setFlatRate] = useState(schedule?.flat_rate?.toString() ?? '')
+
+  async function handleSave() {
+    setLoading(true)
+    setError(null)
+
+    const supabase = createClient()
+
+    if (schedule) {
+      const { error: updateError } = await supabase
+        .from('pm_schedules')
+        .update({
+          frequency,
+          billing_type: billingType,
+          flat_rate: billingType === 'flat_rate' ? parseFloat(flatRate) || null : null,
+        } as never)
+        .eq('id', schedule.id)
+
+      if (updateError) {
+        setError(updateError.message)
+        setLoading(false)
+        return
+      }
+    } else {
+      const { error: insertError } = await supabase.from('pm_schedules').insert({
+        equipment_id: equipmentId,
+        frequency,
+        billing_type: billingType,
+        flat_rate: billingType === 'flat_rate' ? parseFloat(flatRate) || null : null,
+        active: true,
+      } as never)
+
+      if (insertError) {
+        setError(insertError.message)
+        setLoading(false)
+        return
+      }
+    }
+
+    setEditing(false)
+    setLoading(false)
+    router.refresh()
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+          PM Schedule
+        </h2>
+        {schedule && !editing && (
+          <button
+            onClick={() => setEditing(true)}
+            className="text-xs font-medium text-slate-700 hover:text-slate-900"
+          >
+            Edit
+          </button>
+        )}
+      </div>
+
+      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+
+      {!editing && schedule ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <span className="text-gray-500">Frequency</span>
+            <p className="text-gray-900 font-medium capitalize">
+              {schedule.frequency?.replace('-', ' ') ?? '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Billing Type</span>
+            <p className="text-gray-900 font-medium capitalize">
+              {schedule.billing_type?.replace('_', ' ') ?? '—'}
+            </p>
+          </div>
+          {schedule.billing_type === 'flat_rate' && (
+            <div>
+              <span className="text-gray-500">Flat Rate</span>
+              <p className="text-gray-900 font-medium">
+                {schedule.flat_rate != null ? `$${schedule.flat_rate.toFixed(2)}` : '—'}
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3 max-w-md">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
+            <select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as PmFrequency)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              {FREQUENCIES.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Billing Type</label>
+            <select
+              value={billingType}
+              onChange={(e) => setBillingType(e.target.value as BillingType)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              {BILLING_TYPES.map((b) => (
+                <option key={b.value} value={b.value}>{b.label}</option>
+              ))}
+            </select>
+          </div>
+          {billingType === 'flat_rate' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Flat Rate ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={flatRate}
+                onChange={(e) => setFlatRate(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                placeholder="0.00"
+              />
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Saving...' : schedule ? 'Update Schedule' : 'Add Schedule'}
+            </button>
+            {schedule && (
+              <button
+                onClick={() => setEditing(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

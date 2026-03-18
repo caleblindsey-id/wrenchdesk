@@ -1,0 +1,288 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { TicketWithJoins } from '@/lib/db/tickets'
+import { UserRow, TicketStatus } from '@/types/database'
+import StatusBadge from '@/components/StatusBadge'
+import ConfirmDialog from '@/components/ConfirmDialog'
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+const STATUS_OPTIONS: { value: '' | TicketStatus; label: string }[] = [
+  { value: '', label: 'All Statuses' },
+  { value: 'unassigned', label: 'Unassigned' },
+  { value: 'assigned', label: 'Assigned' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'billed', label: 'Billed' },
+]
+
+interface TicketBoardProps {
+  tickets: TicketWithJoins[]
+  users: UserRow[]
+  currentMonth: number
+  currentYear: number
+}
+
+export default function TicketBoard({
+  tickets,
+  users,
+  currentMonth,
+  currentYear,
+}: TicketBoardProps) {
+  const router = useRouter()
+  const thisYear = new Date().getFullYear()
+
+  const [month, setMonth] = useState(currentMonth)
+  const [year, setYear] = useState(currentYear)
+  const [techFilter, setTechFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [assignTo, setAssignTo] = useState('')
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [generateOpen, setGenerateOpen] = useState(false)
+  const [generateLoading, setGenerateLoading] = useState(false)
+
+  function applyFilters() {
+    const params = new URLSearchParams()
+    params.set('month', month.toString())
+    params.set('year', year.toString())
+    if (techFilter) params.set('tech', techFilter)
+    if (statusFilter) params.set('status', statusFilter)
+    router.push(`/tickets?${params.toString()}`)
+  }
+
+  function toggleSelect(id: string) {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelected(next)
+  }
+
+  function toggleAll() {
+    if (selected.size === tickets.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(tickets.map((t) => t.id)))
+    }
+  }
+
+  async function handleBulkAssign() {
+    if (!assignTo || selected.size === 0) return
+    setBulkLoading(true)
+    try {
+      await fetch('/api/tickets/bulk-assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticketIds: Array.from(selected),
+          technicianId: assignTo,
+        }),
+      })
+      setSelected(new Set())
+      setAssignTo('')
+      router.refresh()
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  async function handleGenerate() {
+    setGenerateLoading(true)
+    try {
+      await fetch('/api/tickets/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month, year }),
+      })
+      router.refresh()
+    } finally {
+      setGenerateLoading(false)
+      setGenerateOpen(false)
+    }
+  }
+
+  return (
+    <>
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
+            <select
+              value={month}
+              onChange={(e) => setMonth(parseInt(e.target.value))}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              {MONTHS.map((m, i) => (
+                <option key={i} value={i + 1}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+            <select
+              value={year}
+              onChange={(e) => setYear(parseInt(e.target.value))}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              {[thisYear - 1, thisYear, thisYear + 1].map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Technician</label>
+            <select
+              value={techFilter}
+              onChange={(e) => setTechFilter(e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              <option value="">All Technicians</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={applyFilters}
+            className="px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors"
+          >
+            Apply
+          </button>
+          <div className="ml-auto">
+            <button
+              onClick={() => setGenerateOpen(true)}
+              className="px-4 py-1.5 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+            >
+              Generate {MONTHS[month - 1]} PMs
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Bulk assign */}
+      {selected.size > 0 && (
+        <div className="bg-blue-50 rounded-lg border border-blue-200 p-3 flex items-center gap-3">
+          <span className="text-sm text-blue-800 font-medium">
+            {selected.size} ticket{selected.size > 1 ? 's' : ''} selected
+          </span>
+          <select
+            value={assignTo}
+            onChange={(e) => setAssignTo(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+          >
+            <option value="">Assign to...</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleBulkAssign}
+            disabled={!assignTo || bulkLoading}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {bulkLoading ? 'Assigning...' : 'Apply'}
+          </button>
+        </div>
+      )}
+
+      {/* Ticket table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {tickets.length === 0 ? (
+          <div className="p-8 text-center text-sm text-gray-500">
+            No tickets found for the selected filters.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="px-4 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selected.size === tickets.length && tickets.length > 0}
+                      onChange={toggleAll}
+                      className="rounded border-gray-300"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">Equipment</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">Scheduled Date</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">Technician</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {tickets.map((ticket) => (
+                  <tr
+                    key={ticket.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => router.push(`/tickets/${ticket.id}`)}
+                  >
+                    <td
+                      className="px-4 py-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(ticket.id)}
+                        onChange={() => toggleSelect(ticket.id)}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={ticket.status} />
+                    </td>
+                    <td className="px-4 py-3 text-gray-900">
+                      {ticket.customers?.name ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {[ticket.equipment?.make, ticket.equipment?.model]
+                        .filter(Boolean)
+                        .join(' ') || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {ticket.scheduled_date
+                        ? new Date(ticket.scheduled_date).toLocaleDateString()
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {ticket.users?.name ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={generateOpen}
+        title="Generate PM Tickets"
+        message={`This will create PM tickets for all active schedules in ${MONTHS[month - 1]} ${year}. Existing tickets for this month will not be duplicated.`}
+        confirmLabel="Generate"
+        onConfirm={handleGenerate}
+        onCancel={() => setGenerateOpen(false)}
+        loading={generateLoading}
+      />
+    </>
+  )
+}

@@ -1,0 +1,105 @@
+import { getTicket } from '@/lib/db/tickets'
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
+import StatusBadge from '@/components/StatusBadge'
+import TicketActions from './TicketActions'
+
+export default async function TicketDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const ticket = await getTicket(id)
+
+  if (!ticket) notFound()
+
+  const equipmentLabel = [ticket.equipment?.make, ticket.equipment?.model]
+    .filter(Boolean)
+    .join(' ') || '—'
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <Link
+          href="/tickets"
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Ticket Detail
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {ticket.customers?.name ?? 'Unknown Customer'} — {equipmentLabel}
+          </p>
+        </div>
+        <div className="ml-auto">
+          <StatusBadge status={ticket.status} />
+        </div>
+      </div>
+
+      {/* Read-only info */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
+          Details
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+          <div>
+            <span className="text-gray-500">Customer</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.customers?.name ?? '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Account Number</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.customers?.account_number ?? '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Equipment</span>
+            <p className="text-gray-900 font-medium">{equipmentLabel}</p>
+          </div>
+          <div>
+            <span className="text-gray-500">Serial Number</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.equipment?.serial_number ?? '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Scheduled Date</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.scheduled_date
+                ? new Date(ticket.scheduled_date).toLocaleDateString()
+                : '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Created</span>
+            <p className="text-gray-900 font-medium">
+              {new Date(ticket.created_at).toLocaleDateString()}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Month / Year</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.month}/{ticket.year}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">Assigned Technician</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.assigned_technician?.name ?? '—'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Action section */}
+      <TicketActions ticket={ticket} />
+    </div>
+  )
+}

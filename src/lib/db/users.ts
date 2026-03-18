@@ -16,7 +16,7 @@ export async function getUsers(activeOnly?: boolean): Promise<UserRow[]> {
   const { data, error } = await query
 
   if (error) throw error
-  return data
+  return data as UserRow[]
 }
 
 export async function getUser(id: string): Promise<UserRow | null> {
@@ -33,7 +33,7 @@ export async function getUser(id: string): Promise<UserRow | null> {
     throw error
   }
 
-  return data
+  return data as UserRow
 }
 
 export async function createUser(data: {
@@ -49,12 +49,12 @@ export async function createUser(data: {
       email: data.email,
       name: data.name,
       role: data.role,
-    })
+    } as never)
     .select()
     .single()
 
   if (error) throw error
-  return created
+  return created as UserRow
 }
 
 export async function updateUser(
@@ -65,11 +65,11 @@ export async function updateUser(
 
   const { data: updated, error } = await supabase
     .from('users')
-    .update(data)
+    .update(data as never)
     .eq('id', id)
     .select()
     .single()
 
   if (error) throw error
-  return updated
+  return updated as UserRow
 }

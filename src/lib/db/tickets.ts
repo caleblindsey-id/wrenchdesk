@@ -90,13 +90,13 @@ export async function updateTicket(
 
   const { data: updated, error } = await supabase
     .from('pm_tickets')
-    .update(data)
+    .update(data as never)
     .eq('id', id)
     .select()
     .single()
 
   if (error) throw error
-  return updated
+  return updated as PmTicketRow
 }
 
 export async function completeTicket(
@@ -120,13 +120,13 @@ export async function completeTicket(
       parts_used: data.partsUsed,
       completion_notes: data.completionNotes,
       billing_amount: data.billingAmount,
-    })
+    } as never)
     .eq('id', id)
     .select()
     .single()
 
   if (error) throw error
-  return updated
+  return updated as PmTicketRow
 }
 
 export async function getTicketsByMonth(month: number, year: number): Promise<PmTicketRow[]> {
@@ -140,7 +140,7 @@ export async function getTicketsByMonth(month: number, year: number): Promise<Pm
     .order('created_at')
 
   if (error) throw error
-  return data
+  return data as PmTicketRow[]
 }
 
 export async function bulkAssignTechnician(
@@ -154,11 +154,11 @@ export async function bulkAssignTechnician(
     .update({
       assigned_technician_id: technicianId,
       status: 'assigned',
-    })
+    } as never)
     .in('id', ticketIds)
     .in('status', ['unassigned'])
     .select()
 
   if (error) throw error
-  return data
+  return data as PmTicketRow[]
 }

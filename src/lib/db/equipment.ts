@@ -79,9 +79,9 @@ export async function getEquipmentDetail(id: string): Promise<EquipmentDetail | 
   if (ticketsError) throw ticketsError
 
   return {
-    ...equipmentData,
+    ...(equipmentData as Record<string, unknown>),
     pm_tickets: tickets ?? [],
-  } as EquipmentDetail
+  } as unknown as EquipmentDetail
 }
 
 export async function createEquipment(data: EquipmentInsert): Promise<EquipmentRow> {
@@ -89,12 +89,12 @@ export async function createEquipment(data: EquipmentInsert): Promise<EquipmentR
 
   const { data: created, error } = await supabase
     .from('equipment')
-    .insert(data)
+    .insert(data as never)
     .select()
     .single()
 
   if (error) throw error
-  return created
+  return created as EquipmentRow
 }
 
 export async function updateEquipment(
@@ -105,13 +105,13 @@ export async function updateEquipment(
 
   const { data: updated, error } = await supabase
     .from('equipment')
-    .update(data)
+    .update(data as never)
     .eq('id', id)
     .select()
     .single()
 
   if (error) throw error
-  return updated
+  return updated as EquipmentRow
 }
 
 export async function deactivateEquipment(id: string): Promise<void> {
@@ -119,7 +119,7 @@ export async function deactivateEquipment(id: string): Promise<void> {
 
   const { error } = await supabase
     .from('equipment')
-    .update({ active: false })
+    .update({ active: false } as never)
     .eq('id', id)
 
   if (error) throw error

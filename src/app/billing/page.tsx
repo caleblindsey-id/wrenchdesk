@@ -1,0 +1,23 @@
+import { getTickets } from '@/lib/db/tickets'
+import BillingExport from './BillingExport'
+
+export default async function BillingPage() {
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+
+  const tickets = await getTickets({ month, year, status: 'completed' })
+  const unexported = tickets.filter((t) => !t.billing_exported)
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Billing</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Export completed tickets for billing
+        </p>
+      </div>
+      <BillingExport tickets={unexported} defaultMonth={month} defaultYear={year} />
+    </div>
+  )
+}

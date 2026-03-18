@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { PmTicketRow, PmScheduleRow, EquipmentRow } from '@/types/database'
+import { PmTicketRow, PmTicketInsert, PmScheduleRow, EquipmentRow } from '@/types/database'
 
 function scheduleMatchesMonth(frequency: PmScheduleRow['frequency'], month: number): boolean {
   switch (frequency) {
@@ -39,14 +39,17 @@ export async function POST(request: NextRequest) {
     if (userError) throw userError
 
     // Fetch all active schedules with their equipment
-    const { data: schedules, error: schedulesError } = await supabase
+    const { data: rawSchedules, error: schedulesError } = await supabase
       .from('pm_schedules')
       .select('*, equipment(*)')
       .eq('active', true)
 
     if (schedulesError) throw schedulesError
 
-    const ticketsToCreate: Omit<PmTicketRow, 'id' | 'created_at' | 'updated_at'>[] = []
+    const schedules = rawSchedules as (PmScheduleRow & { equipment: EquipmentRow | null })[]
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ticketsToCreate: any[] = []
     let skipped = 0
 
     for (const schedule of schedules) {
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
     if (ticketsToCreate.length > 0) {
       const { data: insertedTickets, error: insertError } = await supabase
         .from('pm_tickets')
-        .insert(ticketsToCreate)
+        .insert(ticketsToCreate as never)
         .select()
 
       if (insertError) throw insertError
