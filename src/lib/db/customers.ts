@@ -8,6 +8,7 @@ export async function getCustomers(search?: string): Promise<CustomerRow[]> {
     .from('customers')
     .select('*')
     .order('name')
+    .limit(500)
 
   if (search) {
     query = query.ilike('name', `%${search}%`)

@@ -29,7 +29,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (year < 2020 || year > 2100) {
+      return NextResponse.json({ error: 'Invalid year' }, { status: 400 })
+    }
+
     const supabase = await createClient()
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) throw userError
 
     // Fetch all active schedules with their equipment
     const { data: schedules, error: schedulesError } = await supabase
@@ -39,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     if (schedulesError) throw schedulesError
 
-    const created: PmTicketRow[] = []
+    const ticketsToCreate: Omit<PmTicketRow, 'id' | 'created_at' | 'updated_at'>[] = []
     let skipped = 0
 
     for (const schedule of schedules) {
@@ -69,24 +76,29 @@ export async function POST(request: NextRequest) {
       // Determine initial status based on whether equipment has a default technician
       const status = equipment.default_technician_id ? 'assigned' : 'unassigned'
 
-      const { data: ticket, error: insertError } = await supabase
+      ticketsToCreate.push({
+        pm_schedule_id: schedule.id,
+        equipment_id: schedule.equipment_id,
+        customer_id: equipment.customer_id,
+        assigned_technician_id: equipment.default_technician_id ?? null,
+        month,
+        year,
+        status,
+        parts_used: [],
+        created_by_id: user?.id ?? null,
+      })
+    }
+
+    let created: PmTicketRow[] = []
+
+    if (ticketsToCreate.length > 0) {
+      const { data: insertedTickets, error: insertError } = await supabase
         .from('pm_tickets')
-        .insert({
-          pm_schedule_id: schedule.id,
-          equipment_id: schedule.equipment_id,
-          customer_id: equipment.customer_id,
-          assigned_technician_id: equipment.default_technician_id ?? null,
-          month,
-          year,
-          status,
-          parts_used: [],
-        })
+        .insert(ticketsToCreate)
         .select()
-        .single()
 
       if (insertError) throw insertError
-
-      created.push(ticket)
+      created = insertedTickets
     }
 
     return NextResponse.json({

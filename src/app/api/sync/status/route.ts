@@ -14,6 +14,10 @@ export async function GET() {
 
     if (error) throw error
 
+    if (!data) {
+      return NextResponse.json({ status: 'never_run', started_at: null, completed_at: null, records_synced: null, error_message: null })
+    }
+
     return NextResponse.json(data)
   } catch (err) {
     console.error('sync/status error:', err)

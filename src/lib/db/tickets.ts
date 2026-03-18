@@ -156,6 +156,7 @@ export async function bulkAssignTechnician(
       status: 'assigned',
     })
     .in('id', ticketIds)
+    .in('status', ['unassigned'])
     .select()
 
   if (error) throw error
