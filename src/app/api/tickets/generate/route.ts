@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { PmTicketRow, PmTicketInsert, PmScheduleRow, EquipmentRow } from '@/types/database'
+import { PmTicketRow, PmTicketInsert, PmScheduleRow, EquipmentRow, TicketStatus } from '@/types/database'
 
 function scheduleMatchesMonth(frequency: PmScheduleRow['frequency'], month: number): boolean {
   switch (frequency) {
@@ -48,8 +48,7 @@ export async function POST(request: NextRequest) {
 
     const schedules = rawSchedules as (PmScheduleRow & { equipment: EquipmentRow | null })[]
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ticketsToCreate: any[] = []
+    const ticketsToCreate: PmTicketInsert[] = []
     let skipped = 0
 
     for (const schedule of schedules) {
@@ -77,7 +76,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Determine initial status based on whether equipment has a default technician
-      const status = equipment.default_technician_id ? 'assigned' : 'unassigned'
+      const status: TicketStatus = equipment.default_technician_id ? 'assigned' : 'unassigned'
 
       ticketsToCreate.push({
         pm_schedule_id: schedule.id,
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
     if (ticketsToCreate.length > 0) {
       const { data: insertedTickets, error: insertError } = await supabase
         .from('pm_tickets')
-        .insert(ticketsToCreate as never)
+        .insert(ticketsToCreate)
         .select()
 
       if (insertError) throw insertError

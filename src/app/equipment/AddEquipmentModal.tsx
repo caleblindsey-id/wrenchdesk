@@ -55,7 +55,7 @@ export default function AddEquipmentModal({
       description: description || null,
       location_on_site: locationOnSite || null,
       active: true,
-    } as never)
+    } )
 
     if (insertError) {
       setError(insertError.message)

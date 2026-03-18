@@ -89,7 +89,7 @@ export async function createEquipment(data: EquipmentInsert): Promise<EquipmentR
 
   const { data: created, error } = await supabase
     .from('equipment')
-    .insert(data as never)
+    .insert(data )
     .select()
     .single()
 
@@ -105,7 +105,7 @@ export async function updateEquipment(
 
   const { data: updated, error } = await supabase
     .from('equipment')
-    .update(data as never)
+    .update(data )
     .eq('id', id)
     .select()
     .single()
@@ -119,7 +119,7 @@ export async function deactivateEquipment(id: string): Promise<void> {
 
   const { error } = await supabase
     .from('equipment')
-    .update({ active: false } as never)
+    .update({ active: false } )
     .eq('id', id)
 
   if (error) throw error

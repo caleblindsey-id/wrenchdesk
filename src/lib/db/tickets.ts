@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { PmTicketRow, TicketStatus, PartUsed } from '@/types/database'
+import { PmTicketRow, PmTicketUpdate, TicketStatus, PartUsed } from '@/types/database'
 
 export type TicketWithJoins = PmTicketRow & {
   customers: { name: string } | null
@@ -84,13 +84,13 @@ export async function getTicket(id: string): Promise<TicketDetail | null> {
 
 export async function updateTicket(
   id: string,
-  data: Partial<PmTicketRow>
+  data: PmTicketUpdate
 ): Promise<PmTicketRow> {
   const supabase = await createClient()
 
   const { data: updated, error } = await supabase
     .from('pm_tickets')
-    .update(data as never)
+    .update(data)
     .eq('id', id)
     .select()
     .single()
@@ -120,7 +120,7 @@ export async function completeTicket(
       parts_used: data.partsUsed,
       completion_notes: data.completionNotes,
       billing_amount: data.billingAmount,
-    } as never)
+    })
     .eq('id', id)
     .select()
     .single()
@@ -154,7 +154,7 @@ export async function bulkAssignTechnician(
     .update({
       assigned_technician_id: technicianId,
       status: 'assigned',
-    } as never)
+    })
     .in('id', ticketIds)
     .in('status', ['unassigned'])
     .select()

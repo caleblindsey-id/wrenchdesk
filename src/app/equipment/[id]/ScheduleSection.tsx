@@ -46,7 +46,7 @@ export default function ScheduleSection({ equipmentId, schedule }: ScheduleSecti
           frequency,
           billing_type: billingType,
           flat_rate: billingType === 'flat_rate' ? parseFloat(flatRate) || null : null,
-        } as never)
+        } )
         .eq('id', schedule.id)
 
       if (updateError) {
@@ -61,7 +61,7 @@ export default function ScheduleSection({ equipmentId, schedule }: ScheduleSecti
         billing_type: billingType,
         flat_rate: billingType === 'flat_rate' ? parseFloat(flatRate) || null : null,
         active: true,
-      } as never)
+      } )
 
       if (insertError) {
         setError(insertError.message)

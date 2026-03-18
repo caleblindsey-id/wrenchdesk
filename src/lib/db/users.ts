@@ -49,7 +49,7 @@ export async function createUser(data: {
       email: data.email,
       name: data.name,
       role: data.role,
-    } as never)
+    } )
     .select()
     .single()
 
@@ -65,7 +65,7 @@ export async function updateUser(
 
   const { data: updated, error } = await supabase
     .from('users')
-    .update(data as never)
+    .update(data )
     .eq('id', id)
     .select()
     .single()

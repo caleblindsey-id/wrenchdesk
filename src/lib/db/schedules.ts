@@ -19,7 +19,7 @@ export async function createSchedule(data: PmScheduleInsert): Promise<PmSchedule
 
   const { data: created, error } = await supabase
     .from('pm_schedules')
-    .insert(data as never)
+    .insert(data )
     .select()
     .single()
 
@@ -35,7 +35,7 @@ export async function updateSchedule(
 
   const { data: updated, error } = await supabase
     .from('pm_schedules')
-    .update(data as never)
+    .update(data )
     .eq('id', id)
     .select()
     .single()
@@ -49,7 +49,7 @@ export async function deactivateSchedule(id: string): Promise<void> {
 
   const { error } = await supabase
     .from('pm_schedules')
-    .update({ active: false } as never)
+    .update({ active: false } )
     .eq('id', id)
 
   if (error) throw error

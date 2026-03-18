@@ -144,7 +144,7 @@ function UserTableRow({ user }: { user: UserRow }) {
     const supabase = createClient()
     await supabase
       .from('users')
-      .update({ active: !user.active } as never)
+      .update({ active: !user.active } )
       .eq('id', user.id)
     setLoading(false)
     router.refresh()
@@ -205,7 +205,7 @@ function AddUserModal({
       name,
       role,
       active: true,
-    } as never)
+    } )
 
     if (insertError) {
       setError(insertError.message)

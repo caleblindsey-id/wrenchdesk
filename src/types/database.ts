@@ -27,9 +27,11 @@ export interface PartUsed {
 
 // ============================================================
 // Row types (what you get back from SELECT)
+// Note: these must be `type` aliases (not `interface`) so they
+// satisfy Supabase's `Record<string, unknown>` constraint.
 // ============================================================
 
-export interface CustomerRow {
+export type CustomerRow = {
   id: number
   synergy_id: string
   name: string
@@ -40,7 +42,7 @@ export interface CustomerRow {
   synced_at: string | null
 }
 
-export interface ContactRow {
+export type ContactRow = {
   id: number
   customer_id: number | null
   synergy_id: string | null
@@ -50,7 +52,7 @@ export interface ContactRow {
   is_primary: boolean
 }
 
-export interface ProductRow {
+export type ProductRow = {
   id: number
   synergy_id: string
   number: string
@@ -59,7 +61,7 @@ export interface ProductRow {
   synced_at: string | null
 }
 
-export interface UserRow {
+export type UserRow = {
   id: string
   email: string
   name: string
@@ -68,7 +70,7 @@ export interface UserRow {
   created_at: string
 }
 
-export interface EquipmentRow {
+export type EquipmentRow = {
   id: string
   customer_id: number | null
   default_technician_id: string | null
@@ -82,7 +84,7 @@ export interface EquipmentRow {
   updated_at: string
 }
 
-export interface PmScheduleRow {
+export type PmScheduleRow = {
   id: string
   equipment_id: string | null
   frequency: PmFrequency | null
@@ -92,7 +94,7 @@ export interface PmScheduleRow {
   created_at: string
 }
 
-export interface PmTicketRow {
+export type PmTicketRow = {
   id: string
   pm_schedule_id: string | null
   equipment_id: string | null
@@ -113,7 +115,7 @@ export interface PmTicketRow {
   updated_at: string
 }
 
-export interface SyncLogRow {
+export type SyncLogRow = {
   id: number
   sync_type: SyncType | null
   started_at: string
@@ -124,44 +126,71 @@ export interface SyncLogRow {
 }
 
 // ============================================================
-// Insert types (omit auto-generated fields)
+// Helper: make some keys optional
 // ============================================================
 
-export type CustomerInsert = Omit<CustomerRow, 'id'>
+type MakeOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 
-export type ContactInsert = Omit<ContactRow, 'id'>
+// ============================================================
+// Insert types (omit auto-generated fields, optional for DB defaults)
+// ============================================================
 
-export type ProductInsert = Omit<ProductRow, 'id'>
+export type CustomerInsert = MakeOptional<
+  Omit<CustomerRow, 'id'>,
+  'credit_hold' | 'synced_at' | 'account_number' | 'ar_terms' | 'billing_address'
+>
 
-export type UserInsert = Omit<UserRow, 'id' | 'created_at'>
+export type ContactInsert = MakeOptional<
+  Omit<ContactRow, 'id'>,
+  'is_primary' | 'customer_id' | 'synergy_id' | 'name' | 'email' | 'phone'
+>
 
-export type EquipmentInsert = Omit<EquipmentRow, 'id' | 'created_at' | 'updated_at'>
+export type ProductInsert = MakeOptional<
+  Omit<ProductRow, 'id'>,
+  'synced_at' | 'description' | 'unit_price'
+>
 
-export type PmScheduleInsert = Omit<PmScheduleRow, 'id' | 'created_at'>
+export type UserInsert = MakeOptional<
+  Omit<UserRow, 'id' | 'created_at'>,
+  'active'
+>
 
-export type PmTicketInsert = Omit<PmTicketRow, 'id' | 'created_at' | 'updated_at'>
+export type EquipmentInsert = MakeOptional<
+  Omit<EquipmentRow, 'id' | 'created_at' | 'updated_at'>,
+  'active' | 'customer_id' | 'default_technician_id' | 'make' | 'model' | 'serial_number' | 'description' | 'location_on_site'
+>
+
+export type PmScheduleInsert = MakeOptional<
+  Omit<PmScheduleRow, 'id' | 'created_at'>,
+  'active' | 'equipment_id' | 'frequency' | 'billing_type' | 'flat_rate'
+>
+
+export type PmTicketInsert = MakeOptional<
+  Omit<PmTicketRow, 'id' | 'created_at' | 'updated_at'>,
+  'status' | 'billing_exported' | 'parts_used' | 'pm_schedule_id' | 'equipment_id' | 'customer_id' | 'assigned_technician_id' | 'created_by_id' | 'scheduled_date' | 'completed_date' | 'completion_notes' | 'hours_worked' | 'billing_amount'
+>
 
 export type SyncLogInsert = Omit<SyncLogRow, 'id'>
 
 // ============================================================
-// Update types (all fields optional except id)
+// Update types (all fields optional)
 // ============================================================
 
-export type CustomerUpdate = Partial<CustomerInsert>
+export type CustomerUpdate = Partial<Omit<CustomerRow, 'id'>>
 
-export type ContactUpdate = Partial<ContactInsert>
+export type ContactUpdate = Partial<Omit<ContactRow, 'id'>>
 
-export type ProductUpdate = Partial<ProductInsert>
+export type ProductUpdate = Partial<Omit<ProductRow, 'id'>>
 
-export type UserUpdate = Partial<UserInsert>
+export type UserUpdate = Partial<Omit<UserRow, 'id' | 'created_at'>>
 
-export type EquipmentUpdate = Partial<EquipmentInsert>
+export type EquipmentUpdate = Partial<Omit<EquipmentRow, 'id' | 'created_at' | 'updated_at'>>
 
-export type PmScheduleUpdate = Partial<PmScheduleInsert>
+export type PmScheduleUpdate = Partial<Omit<PmScheduleRow, 'id' | 'created_at'>>
 
-export type PmTicketUpdate = Partial<PmTicketInsert>
+export type PmTicketUpdate = Partial<Omit<PmTicketRow, 'id' | 'created_at' | 'updated_at'>>
 
-export type SyncLogUpdate = Partial<SyncLogInsert>
+export type SyncLogUpdate = Partial<Omit<SyncLogRow, 'id'>>
 
 // ============================================================
 // Supabase Database type
@@ -174,45 +203,128 @@ export interface Database {
         Row: CustomerRow
         Insert: CustomerInsert
         Update: CustomerUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'contacts_customer_id_fkey'
+            columns: ['id']
+            isOneToOne: false
+            referencedRelation: 'contacts'
+            referencedColumns: ['customer_id']
+          },
+        ]
       }
       contacts: {
         Row: ContactRow
         Insert: ContactInsert
         Update: ContactUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'contacts_customer_id_fkey'
+            columns: ['customer_id']
+            isOneToOne: false
+            referencedRelation: 'customers'
+            referencedColumns: ['id']
+          },
+        ]
       }
       products: {
         Row: ProductRow
         Insert: ProductInsert
         Update: ProductUpdate
+        Relationships: []
       }
       users: {
         Row: UserRow
         Insert: UserInsert
         Update: UserUpdate
+        Relationships: []
       }
       equipment: {
         Row: EquipmentRow
         Insert: EquipmentInsert
         Update: EquipmentUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'equipment_customer_id_fkey'
+            columns: ['customer_id']
+            isOneToOne: false
+            referencedRelation: 'customers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'equipment_default_technician_id_fkey'
+            columns: ['default_technician_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
       }
       pm_schedules: {
         Row: PmScheduleRow
         Insert: PmScheduleInsert
         Update: PmScheduleUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'pm_schedules_equipment_id_fkey'
+            columns: ['equipment_id']
+            isOneToOne: false
+            referencedRelation: 'equipment'
+            referencedColumns: ['id']
+          },
+        ]
       }
       pm_tickets: {
         Row: PmTicketRow
         Insert: PmTicketInsert
         Update: PmTicketUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'pm_tickets_pm_schedule_id_fkey'
+            columns: ['pm_schedule_id']
+            isOneToOne: false
+            referencedRelation: 'pm_schedules'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pm_tickets_equipment_id_fkey'
+            columns: ['equipment_id']
+            isOneToOne: false
+            referencedRelation: 'equipment'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pm_tickets_customer_id_fkey'
+            columns: ['customer_id']
+            isOneToOne: false
+            referencedRelation: 'customers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pm_tickets_assigned_technician_id_fkey'
+            columns: ['assigned_technician_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pm_tickets_created_by_id_fkey'
+            columns: ['created_by_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
       }
       sync_log: {
         Row: SyncLogRow
         Insert: SyncLogInsert
         Update: SyncLogUpdate
+        Relationships: []
       }
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
+    Views: {}
+    Functions: {}
     Enums: {
       user_role: UserRole
       ticket_status: TicketStatus

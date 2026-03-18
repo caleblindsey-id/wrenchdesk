@@ -46,6 +46,7 @@ export default function TicketBoard({
   const [bulkLoading, setBulkLoading] = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [generateLoading, setGenerateLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   function applyFilters() {
     const params = new URLSearchParams()
@@ -74,8 +75,9 @@ export default function TicketBoard({
   async function handleBulkAssign() {
     if (!assignTo || selected.size === 0) return
     setBulkLoading(true)
+    setError(null)
     try {
-      await fetch('/api/tickets/bulk-assign', {
+      const res = await fetch('/api/tickets/bulk-assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -83,6 +85,11 @@ export default function TicketBoard({
           technicianId: assignTo,
         }),
       })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? 'Failed to assign tickets')
+        return
+      }
       setSelected(new Set())
       setAssignTo('')
       router.refresh()
@@ -93,12 +100,18 @@ export default function TicketBoard({
 
   async function handleGenerate() {
     setGenerateLoading(true)
+    setError(null)
     try {
-      await fetch('/api/tickets/generate', {
+      const res = await fetch('/api/tickets/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ month, year }),
       })
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error ?? 'Failed to generate tickets')
+        return
+      }
       router.refresh()
     } finally {
       setGenerateLoading(false)
@@ -176,6 +189,13 @@ export default function TicketBoard({
           </div>
         </div>
       </div>
+
+      {/* Error display */}
+      {error && (
+        <div className="bg-red-50 rounded-lg border border-red-200 p-3">
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
+      )}
 
       {/* Bulk assign */}
       {selected.size > 0 && (

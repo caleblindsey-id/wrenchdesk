@@ -41,7 +41,7 @@ export default function EquipmentForm({ equipment, users }: EquipmentFormProps) 
         location_on_site: locationOnSite || null,
         default_technician_id: defaultTechId || null,
         active,
-      } as never)
+      } )
       .eq('id', equipment.id)
 
     if (updateError) {

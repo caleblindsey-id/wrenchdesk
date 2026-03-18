@@ -36,7 +36,7 @@ export async function getCustomer(
     throw error
   }
 
-  return data as CustomerRow & { contacts: ContactRow[] }
+  return data as unknown as CustomerRow & { contacts: ContactRow[] }
 }
 
 export async function searchCustomers(query: string): Promise<CustomerRow[]> {

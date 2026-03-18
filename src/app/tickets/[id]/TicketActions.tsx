@@ -184,7 +184,7 @@ export default function TicketActions({ ticket }: TicketActionsProps) {
             {parts.length > 0 && (
               <div className="space-y-2">
                 {parts.map((part, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={`new-part-${i}`} className="flex items-center gap-2">
                     <input
                       type="text"
                       placeholder="Description"
@@ -320,7 +320,7 @@ export default function TicketActions({ ticket }: TicketActionsProps) {
           <span className="text-sm text-gray-500">Parts Used</span>
           <div className="mt-1 space-y-1">
             {ticket.parts_used.map((part, i) => (
-              <div key={i} className="text-sm text-gray-900">
+              <div key={`${part.synergy_product_id ?? 'new'}-${i}`} className="text-sm text-gray-900">
                 {part.description} — Qty: {part.quantity} @ $
                 {part.unit_price.toFixed(2)}
               </div>
