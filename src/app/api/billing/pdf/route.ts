@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
     // --- Mark tickets as exported ---
     const { error: updateError } = await supabase
       .from('pm_tickets')
-      .update({ billing_exported: true })
+      .update({ billing_exported: true, status: 'billed' })
       .in('id', ticketIds as string[])
 
     if (updateError) {

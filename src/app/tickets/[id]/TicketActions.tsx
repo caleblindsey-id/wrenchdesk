@@ -52,7 +52,7 @@ export default function TicketActions({ ticket }: TicketActionsProps) {
     setError(null)
     try {
       const partsUsed: PartUsed[] = parts.map((p) => ({
-        synergy_product_id: 0,
+        synergy_product_id: null,
         description: p.description,
         quantity: p.quantity,
         unit_price: p.unitPrice,

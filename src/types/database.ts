@@ -19,7 +19,7 @@ export type SyncStatus = 'running' | 'success' | 'failed'
 // ============================================================
 
 export interface PartUsed {
-  synergy_product_id: number
+  synergy_product_id: number | null
   quantity: number
   description: string
   unit_price: number
