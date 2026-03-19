@@ -2,19 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { PmTicketRow, PmTicketInsert, PmScheduleRow, EquipmentRow, TicketStatus } from '@/types/database'
 
-function scheduleMatchesMonth(frequency: PmScheduleRow['frequency'], month: number): boolean {
-  switch (frequency) {
-    case 'monthly':
-      return true
-    case 'quarterly':
-      return [1, 4, 7, 10].includes(month)
-    case 'semi-annual':
-      return [1, 7].includes(month)
-    case 'annual':
-      return month === 1
-    default:
-      return false
-  }
+function scheduleMatchesMonth(schedule: PmScheduleRow, month: number): boolean {
+  const { interval_months, anchor_month } = schedule
+  // Offset from anchor, wrapping around year boundary (0-indexed mod 12)
+  const offset = ((month - anchor_month) % 12 + 12) % 12
+  return offset % interval_months === 0
 }
 
 export async function POST(request: NextRequest) {
@@ -52,7 +44,7 @@ export async function POST(request: NextRequest) {
     let skipped = 0
 
     for (const schedule of schedules) {
-      if (!scheduleMatchesMonth(schedule.frequency, month)) {
+      if (!scheduleMatchesMonth(schedule, month)) {
         continue
       }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { TicketDetail } from '@/lib/db/tickets'
 import { PartUsed } from '@/types/database'
 
@@ -11,6 +11,7 @@ interface TicketActionsProps {
 
 export default function TicketActions({ ticket }: TicketActionsProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,7 +39,7 @@ export default function TicketActions({ ticket }: TicketActionsProps) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to start ticket')
       }
-      router.refresh()
+      router.push(pathname)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -73,7 +74,7 @@ export default function TicketActions({ ticket }: TicketActionsProps) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to complete ticket')
       }
-      router.refresh()
+      router.push(pathname)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

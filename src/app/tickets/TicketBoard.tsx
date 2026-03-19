@@ -112,7 +112,7 @@ export default function TicketBoard({
         setError(data.error ?? 'Failed to generate tickets')
         return
       }
-      router.refresh()
+      router.push(`/tickets?month=${month}&year=${year}`)
     } finally {
       setGenerateLoading(false)
       setGenerateOpen(false)

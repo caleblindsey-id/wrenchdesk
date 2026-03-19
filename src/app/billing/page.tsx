@@ -1,10 +1,15 @@
 import { getTickets } from '@/lib/db/tickets'
 import BillingExport from './BillingExport'
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string; year?: string }>
+}) {
+  const params = await searchParams
   const now = new Date()
-  const month = now.getMonth() + 1
-  const year = now.getFullYear()
+  const month = params.month ? parseInt(params.month) : now.getMonth() + 1
+  const year = params.year ? parseInt(params.year) : now.getFullYear()
 
   const tickets = await getTickets({ month, year, status: 'completed' })
   const unexported = tickets.filter((t) => !t.billing_exported)

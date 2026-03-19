@@ -6,8 +6,6 @@ export type UserRole = 'manager' | 'coordinator' | 'technician'
 
 export type TicketStatus = 'unassigned' | 'assigned' | 'in_progress' | 'completed' | 'billed'
 
-export type PmFrequency = 'monthly' | 'quarterly' | 'semi-annual' | 'annual'
-
 export type BillingType = 'flat_rate' | 'time_and_materials' | 'contract'
 
 export type SyncType = 'customers' | 'contacts' | 'products' | 'full'
@@ -87,7 +85,8 @@ export type EquipmentRow = {
 export type PmScheduleRow = {
   id: string
   equipment_id: string | null
-  frequency: PmFrequency | null
+  interval_months: number
+  anchor_month: number
   billing_type: BillingType | null
   flat_rate: number | null
   active: boolean
@@ -162,7 +161,7 @@ export type EquipmentInsert = MakeOptional<
 
 export type PmScheduleInsert = MakeOptional<
   Omit<PmScheduleRow, 'id' | 'created_at'>,
-  'active' | 'equipment_id' | 'frequency' | 'billing_type' | 'flat_rate'
+  'active' | 'equipment_id' | 'interval_months' | 'anchor_month' | 'billing_type' | 'flat_rate'
 >
 
 export type PmTicketInsert = MakeOptional<
@@ -328,7 +327,6 @@ export interface Database {
     Enums: {
       user_role: UserRole
       ticket_status: TicketStatus
-      pm_frequency: PmFrequency
       billing_type: BillingType
       sync_type: SyncType
       sync_status: SyncStatus

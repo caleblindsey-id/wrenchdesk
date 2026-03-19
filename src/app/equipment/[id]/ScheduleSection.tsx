@@ -3,13 +3,20 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { PmScheduleRow, PmFrequency, BillingType } from '@/types/database'
+import { PmScheduleRow, BillingType } from '@/types/database'
 
-const FREQUENCIES: { value: PmFrequency; label: string }[] = [
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'quarterly', label: 'Quarterly' },
-  { value: 'semi-annual', label: 'Semi-Annual' },
-  { value: 'annual', label: 'Annual' },
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+const INTERVAL_OPTIONS = [
+  { value: 1,  label: 'Every month' },
+  { value: 2,  label: 'Every 2 months' },
+  { value: 3,  label: 'Every 3 months' },
+  { value: 4,  label: 'Every 4 months' },
+  { value: 6,  label: 'Every 6 months' },
+  { value: 12, label: 'Once a year' },
 ]
 
 const BILLING_TYPES: { value: BillingType; label: string }[] = [
@@ -17,6 +24,12 @@ const BILLING_TYPES: { value: BillingType; label: string }[] = [
   { value: 'time_and_materials', label: 'Time & Materials' },
   { value: 'contract', label: 'Contract' },
 ]
+
+function describeSchedule(schedule: PmScheduleRow): string {
+  const intervalLabel = INTERVAL_OPTIONS.find((o) => o.value === schedule.interval_months)?.label
+    ?? `Every ${schedule.interval_months} months`
+  return `${intervalLabel}, starting ${MONTHS[schedule.anchor_month - 1]}`
+}
 
 interface ScheduleSectionProps {
   equipmentId: string
@@ -29,7 +42,8 @@ export default function ScheduleSection({ equipmentId, schedule }: ScheduleSecti
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [frequency, setFrequency] = useState<PmFrequency>(schedule?.frequency ?? 'quarterly')
+  const [intervalMonths, setIntervalMonths] = useState(schedule?.interval_months ?? 3)
+  const [anchorMonth, setAnchorMonth] = useState(schedule?.anchor_month ?? 1)
   const [billingType, setBillingType] = useState<BillingType>(schedule?.billing_type ?? 'flat_rate')
   const [flatRate, setFlatRate] = useState(schedule?.flat_rate?.toString() ?? '')
 
@@ -39,14 +53,17 @@ export default function ScheduleSection({ equipmentId, schedule }: ScheduleSecti
 
     const supabase = createClient()
 
+    const payload = {
+      interval_months: intervalMonths,
+      anchor_month: anchorMonth,
+      billing_type: billingType,
+      flat_rate: billingType === 'flat_rate' ? parseFloat(flatRate) || null : null,
+    }
+
     if (schedule) {
       const { error: updateError } = await supabase
         .from('pm_schedules')
-        .update({
-          frequency,
-          billing_type: billingType,
-          flat_rate: billingType === 'flat_rate' ? parseFloat(flatRate) || null : null,
-        } )
+        .update(payload)
         .eq('id', schedule.id)
 
       if (updateError) {
@@ -57,11 +74,9 @@ export default function ScheduleSection({ equipmentId, schedule }: ScheduleSecti
     } else {
       const { error: insertError } = await supabase.from('pm_schedules').insert({
         equipment_id: equipmentId,
-        frequency,
-        billing_type: billingType,
-        flat_rate: billingType === 'flat_rate' ? parseFloat(flatRate) || null : null,
+        ...payload,
         active: true,
-      } )
+      })
 
       if (insertError) {
         setError(insertError.message)
@@ -97,9 +112,7 @@ export default function ScheduleSection({ equipmentId, schedule }: ScheduleSecti
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div>
             <span className="text-gray-500">Frequency</span>
-            <p className="text-gray-900 font-medium capitalize">
-              {schedule.frequency?.replace('-', ' ') ?? '—'}
-            </p>
+            <p className="text-gray-900 font-medium">{describeSchedule(schedule)}</p>
           </div>
           <div>
             <span className="text-gray-500">Billing Type</span>
@@ -121,12 +134,27 @@ export default function ScheduleSection({ equipmentId, schedule }: ScheduleSecti
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
             <select
-              value={frequency}
-              onChange={(e) => setFrequency(e.target.value as PmFrequency)}
+              value={intervalMonths}
+              onChange={(e) => setIntervalMonths(parseInt(e.target.value))}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
-              {FREQUENCIES.map((f) => (
-                <option key={f.value} value={f.value}>{f.label}</option>
+              {INTERVAL_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Starting month
+              <span className="text-gray-400 font-normal ml-1">(first month this PM runs)</span>
+            </label>
+            <select
+              value={anchorMonth}
+              onChange={(e) => setAnchorMonth(parseInt(e.target.value))}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              {MONTHS.map((m, i) => (
+                <option key={i + 1} value={i + 1}>{m}</option>
               ))}
             </select>
           </div>
