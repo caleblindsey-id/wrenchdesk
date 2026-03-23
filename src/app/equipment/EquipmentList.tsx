@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ChevronRight } from 'lucide-react'
 import { EquipmentWithCustomer } from '@/lib/db/equipment'
 import AddEquipmentModal from './AddEquipmentModal'
 
@@ -70,59 +71,98 @@ export default function EquipmentList({ equipment }: EquipmentListProps) {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Equipment list */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {filtered.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
             No equipment found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">Customer</th>
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">Make / Model</th>
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">Serial Number</th>
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">Location</th>
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtered.map((e) => (
-                  <tr
-                    key={e.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => router.push(`/equipment/${e.id}`)}
-                  >
-                    <td className="px-5 py-3 text-gray-900">
+          <>
+            {/* Mobile cards — hidden on desktop */}
+            <div className="lg:hidden divide-y divide-gray-100">
+              {filtered.map((e) => (
+                <div
+                  key={e.id}
+                  className="px-4 py-3 cursor-pointer active:bg-gray-50"
+                  onClick={() => router.push(`/equipment/${e.id}`)}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-900">
                       {e.customers?.name ?? '—'}
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">
-                      {[e.make, e.model].filter(Boolean).join(' ') || '—'}
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">
-                      {e.serial_number ?? '—'}
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">
-                      {e.location_on_site ?? '—'}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          e.active
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {e.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {[e.make, e.model].filter(Boolean).join(' ') || '—'}
+                    {e.serial_number ? ` · S/N: ${e.serial_number}` : ''}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {e.location_on_site && (
+                      <span className="text-xs text-gray-500">{e.location_on_site}</span>
+                    )}
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        e.active
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {e.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table — hidden on mobile */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">Customer</th>
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">Make / Model</th>
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">Serial Number</th>
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">Location</th>
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filtered.map((e) => (
+                    <tr
+                      key={e.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/equipment/${e.id}`)}
+                    >
+                      <td className="px-5 py-3 text-gray-900">
+                        {e.customers?.name ?? '—'}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">
+                        {[e.make, e.model].filter(Boolean).join(' ') || '—'}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">
+                        {e.serial_number ?? '—'}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">
+                        {e.location_on_site ?? '—'}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            e.active
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {e.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

@@ -48,7 +48,6 @@ export default function BillingExport({
   function handleMonthChange(newMonth: number, newYear: number) {
     setMonth(newMonth)
     setYear(newYear)
-    // Reload with new params
     router.push(`/billing?month=${newMonth}&year=${newYear}`)
   }
 
@@ -99,34 +98,34 @@ export default function BillingExport({
 
   return (
     <>
-      {/* Month picker */}
+      {/* Month picker — stacked on mobile, row on desktop */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:gap-3">
+          <div className="w-full lg:w-auto">
             <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
             <select
               value={month}
               onChange={(e) => handleMonthChange(parseInt(e.target.value), year)}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
               {MONTHS.map((m, i) => (
                 <option key={i} value={i + 1}>{m}</option>
               ))}
             </select>
           </div>
-          <div>
+          <div className="w-full lg:w-auto">
             <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
             <select
               value={year}
               onChange={(e) => handleMonthChange(month, parseInt(e.target.value))}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
               {[thisYear - 1, thisYear, thisYear + 1].map((y) => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
           </div>
-          <div className="ml-auto flex items-center gap-4">
+          <div className="w-full lg:w-auto lg:ml-auto flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-4">
             {selected.size > 0 && (
               <span className="text-sm text-gray-600">
                 {selected.size} selected — ${selectedTotal.toFixed(2)}
@@ -135,7 +134,7 @@ export default function BillingExport({
             <button
               onClick={handleExport}
               disabled={selected.size === 0 || exporting}
-              className="px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
             >
               {exporting ? 'Generating PDF…' : 'Export PDF'}
             </button>
@@ -156,73 +155,117 @@ export default function BillingExport({
         </div>
       )}
 
-      {/* Table */}
+      {/* Billing list */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {tickets.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
             No completed, unexported tickets for this period.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 text-left">
+          <>
+            {/* Mobile cards — hidden on desktop */}
+            <div className="lg:hidden divide-y divide-gray-100">
+              {tickets.map((t) => (
+                <div
+                  key={t.id}
+                  className="px-4 py-3"
+                  onClick={() => toggleSelect(t.id)}
+                >
+                  <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
-                      checked={selected.size === tickets.length && tickets.length > 0}
-                      onChange={toggleAll}
-                      className="rounded border-gray-300"
+                      checked={selected.has(t.id)}
+                      onChange={() => toggleSelect(t.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded border-gray-300 mt-0.5 shrink-0"
                     />
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Equipment</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Technician</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600">Hours</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600">Billing</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Completed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {tickets.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {t.customers?.name ?? '—'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {[t.equipment?.make, t.equipment?.model]
+                          .filter(Boolean)
+                          .join(' ') || '—'}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Tech: {t.users?.name ?? '—'} · Hrs: {t.hours_worked ?? '—'} ·{' '}
+                        {t.billing_amount != null ? `$${t.billing_amount.toFixed(2)}` : '—'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Completed:{' '}
+                        {t.completed_date
+                          ? new Date(t.completed_date).toLocaleDateString()
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table — hidden on mobile */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-4 py-3 text-left">
                       <input
                         type="checkbox"
-                        checked={selected.has(t.id)}
-                        onChange={() => toggleSelect(t.id)}
+                        checked={selected.size === tickets.length && tickets.length > 0}
+                        onChange={toggleAll}
                         className="rounded border-gray-300"
                       />
-                    </td>
-                    <td className="px-4 py-3 text-gray-900">
-                      {t.customers?.name ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {[t.equipment?.make, t.equipment?.model]
-                        .filter(Boolean)
-                        .join(' ') || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {t.users?.name ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
-                      {t.hours_worked ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-900 font-medium">
-                      {t.billing_amount != null
-                        ? `$${t.billing_amount.toFixed(2)}`
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {t.completed_date
-                        ? new Date(t.completed_date).toLocaleDateString()
-                        : '—'}
-                    </td>
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Equipment</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Technician</th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">Hours</th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">Billing</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Completed</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {tickets.map((t) => (
+                    <tr key={t.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(t.id)}
+                          onChange={() => toggleSelect(t.id)}
+                          className="rounded border-gray-300"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-gray-900">
+                        {t.customers?.name ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {[t.equipment?.make, t.equipment?.model]
+                          .filter(Boolean)
+                          .join(' ') || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {t.users?.name ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-600">
+                        {t.hours_worked ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-900 font-medium">
+                        {t.billing_amount != null
+                          ? `$${t.billing_amount.toFixed(2)}`
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {t.completed_date
+                          ? new Date(t.completed_date).toLocaleDateString()
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </>

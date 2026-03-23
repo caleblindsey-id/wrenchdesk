@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getTickets } from '@/lib/db/tickets'
 import {
   ClipboardList,
@@ -5,6 +6,7 @@ import {
   Play,
   CheckCircle,
   Receipt,
+  ChevronRight,
 } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import SyncStatusBanner from '@/components/SyncStatusBanner'
@@ -94,54 +96,90 @@ export default async function DashboardPage() {
             No upcoming PMs for this month.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">
-                    Customer
-                  </th>
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">
-                    Equipment
-                  </th>
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">
-                    Scheduled Date
-                  </th>
-                  <th className="px-5 py-3 text-left font-medium text-gray-600">
-                    Technician
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {upcoming.map((ticket) => (
-                  <tr key={ticket.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3">
-                      <StatusBadge status={ticket.status} />
-                    </td>
-                    <td className="px-5 py-3 text-gray-900">
-                      {ticket.customers?.name ?? '—'}
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">
-                      {[ticket.equipment?.make, ticket.equipment?.model]
-                        .filter(Boolean)
-                        .join(' ') || '—'}
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">
-                      {ticket.scheduled_date
-                        ? new Date(ticket.scheduled_date).toLocaleDateString()
-                        : '—'}
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">
-                      {ticket.users?.name ?? '—'}
-                    </td>
+          <>
+            {/* Mobile cards — hidden on desktop */}
+            <div className="lg:hidden divide-y divide-gray-100">
+              {upcoming.map((ticket) => (
+                <Link
+                  key={ticket.id}
+                  href={`/tickets/${ticket.id}`}
+                  className="block px-4 py-3 active:bg-gray-50"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <StatusBadge status={ticket.status} />
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {ticket.customers?.name ?? '—'}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {[ticket.equipment?.make, ticket.equipment?.model]
+                      .filter(Boolean)
+                      .join(' ') || '—'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Scheduled:{' '}
+                    {ticket.scheduled_date
+                      ? new Date(ticket.scheduled_date).toLocaleDateString()
+                      : '—'}{' '}
+                    · Tech: {ticket.users?.name ?? '—'}
+                  </p>
+                </Link>
+              ))}
+            </div>
+
+            {/* Desktop table — hidden on mobile */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">
+                      Status
+                    </th>
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">
+                      Customer
+                    </th>
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">
+                      Equipment
+                    </th>
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">
+                      Scheduled Date
+                    </th>
+                    <th className="px-5 py-3 text-left font-medium text-gray-600">
+                      Technician
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {upcoming.map((ticket) => (
+                    <tr key={ticket.id} className="hover:bg-gray-50">
+                      <td className="px-5 py-3">
+                        <StatusBadge status={ticket.status} />
+                      </td>
+                      <td className="px-5 py-3 text-gray-900">
+                        {ticket.customers?.name ?? '—'}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">
+                        {[ticket.equipment?.make, ticket.equipment?.model]
+                          .filter(Boolean)
+                          .join(' ') || '—'}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">
+                        {ticket.scheduled_date
+                          ? new Date(ticket.scheduled_date).toLocaleDateString()
+                          : '—'}
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">
+                        {ticket.users?.name ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

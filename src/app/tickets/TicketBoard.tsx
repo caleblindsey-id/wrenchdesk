@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ChevronRight } from 'lucide-react'
 import { TicketWithJoins } from '@/lib/db/tickets'
 import { UserRow, TicketStatus } from '@/types/database'
 import StatusBadge from '@/components/StatusBadge'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import CreateTicketModal from './CreateTicketModal'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -46,6 +48,7 @@ export default function TicketBoard({
   const [bulkLoading, setBulkLoading] = useState(false)
   const [generateOpen, setGenerateOpen] = useState(false)
   const [generateLoading, setGenerateLoading] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function applyFilters() {
@@ -121,39 +124,39 @@ export default function TicketBoard({
 
   return (
     <>
-      {/* Filters */}
+      {/* Filters — stacked on mobile, row on desktop */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:gap-3">
+          <div className="w-full lg:w-auto">
             <label className="block text-xs font-medium text-gray-600 mb-1">Month</label>
             <select
               value={month}
               onChange={(e) => setMonth(parseInt(e.target.value))}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
               {MONTHS.map((m, i) => (
                 <option key={i} value={i + 1}>{m}</option>
               ))}
             </select>
           </div>
-          <div>
+          <div className="w-full lg:w-auto">
             <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
             <select
               value={year}
               onChange={(e) => setYear(parseInt(e.target.value))}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
               {[thisYear - 1, thisYear, thisYear + 1].map((y) => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
           </div>
-          <div>
+          <div className="w-full lg:w-auto">
             <label className="block text-xs font-medium text-gray-600 mb-1">Technician</label>
             <select
               value={techFilter}
               onChange={(e) => setTechFilter(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
               <option value="">All Technicians</option>
               {users.map((u) => (
@@ -161,12 +164,12 @@ export default function TicketBoard({
               ))}
             </select>
           </div>
-          <div>
+          <div className="w-full lg:w-auto">
             <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
             >
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -175,14 +178,20 @@ export default function TicketBoard({
           </div>
           <button
             onClick={applyFilters}
-            className="px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors"
+            className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors"
           >
             Apply
           </button>
-          <div className="ml-auto">
+          <div className="w-full lg:w-auto lg:ml-auto flex gap-2">
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors"
+            >
+              New Ticket
+            </button>
             <button
               onClick={() => setGenerateOpen(true)}
-              className="px-4 py-1.5 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+              className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
             >
               Generate {MONTHS[month - 1]} PMs
             </button>
@@ -223,74 +232,110 @@ export default function TicketBoard({
         </div>
       )}
 
-      {/* Ticket table */}
+      {/* Ticket list */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         {tickets.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
             No tickets found for the selected filters.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 text-left">
-                    <input
-                      type="checkbox"
-                      checked={selected.size === tickets.length && tickets.length > 0}
-                      onChange={toggleAll}
-                      className="rounded border-gray-300"
-                    />
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Equipment</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Scheduled Date</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Technician</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {tickets.map((ticket) => (
-                  <tr
-                    key={ticket.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => router.push(`/tickets/${ticket.id}`)}
-                  >
-                    <td
-                      className="px-4 py-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+          <>
+            {/* Mobile cards — hidden on desktop */}
+            <div className="lg:hidden divide-y divide-gray-100">
+              {tickets.map((ticket) => (
+                <div
+                  key={ticket.id}
+                  className="px-4 py-3 cursor-pointer active:bg-gray-50"
+                  onClick={() => router.push(`/tickets/${ticket.id}`)}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <StatusBadge status={ticket.status} />
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {ticket.customers?.name ?? '—'}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {[ticket.equipment?.make, ticket.equipment?.model]
+                      .filter(Boolean)
+                      .join(' ') || '—'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Scheduled:{' '}
+                    {ticket.scheduled_date
+                      ? new Date(ticket.scheduled_date).toLocaleDateString()
+                      : '—'}{' '}
+                    · Tech: {ticket.users?.name ?? '—'}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table — hidden on mobile */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-4 py-3 text-left">
                       <input
                         type="checkbox"
-                        checked={selected.has(ticket.id)}
-                        onChange={() => toggleSelect(ticket.id)}
+                        checked={selected.size === tickets.length && tickets.length > 0}
+                        onChange={toggleAll}
                         className="rounded border-gray-300"
                       />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={ticket.status} />
-                    </td>
-                    <td className="px-4 py-3 text-gray-900">
-                      {ticket.customers?.name ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {[ticket.equipment?.make, ticket.equipment?.model]
-                        .filter(Boolean)
-                        .join(' ') || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {ticket.scheduled_date
-                        ? new Date(ticket.scheduled_date).toLocaleDateString()
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {ticket.users?.name ?? '—'}
-                    </td>
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Equipment</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Scheduled Date</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">Technician</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {tickets.map((ticket) => (
+                    <tr
+                      key={ticket.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => router.push(`/tickets/${ticket.id}`)}
+                    >
+                      <td
+                        className="px-4 py-3"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.has(ticket.id)}
+                          onChange={() => toggleSelect(ticket.id)}
+                          className="rounded border-gray-300"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={ticket.status} />
+                      </td>
+                      <td className="px-4 py-3 text-gray-900">
+                        {ticket.customers?.name ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {[ticket.equipment?.make, ticket.equipment?.model]
+                          .filter(Boolean)
+                          .join(' ') || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {ticket.scheduled_date
+                          ? new Date(ticket.scheduled_date).toLocaleDateString()
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {ticket.users?.name ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -302,6 +347,11 @@ export default function TicketBoard({
         onConfirm={handleGenerate}
         onCancel={() => setGenerateOpen(false)}
         loading={generateLoading}
+      />
+
+      <CreateTicketModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
       />
     </>
   )

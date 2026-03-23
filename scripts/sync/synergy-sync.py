@@ -9,7 +9,6 @@ Runs nightly at 5:00 AM via Windows Task Scheduler.
 
 import os
 import sys
-import json
 import logging
 import pyodbc
 import requests
@@ -24,6 +23,21 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 BATCH_SIZE = 500  # Max records per Supabase upsert request
+
+# Product commodity codes to include (service-relevant items only)
+PRODUCT_COMMODITY_CODES = (
+    "P210",  # PARTS
+    "E400",  # EQUIPMENT
+    "E401",  # EQUIPMENTSHOP
+    "E402",  # USEDEQUIP
+    "L175",  # LABOR
+    "V175",  # VACUUMPRODUCTS
+    "F200",  # FLOORBURNISHERS
+    "F275",  # FLOORSCRUBBERS
+    "S450",  # SWEEPERS
+    "C200",  # CARPTEXTRACTORS
+    "P250",  # PRESSUREWASHER
+)
 
 # ============================================================
 # Logging setup
@@ -219,7 +233,8 @@ def discover_tables(conn) -> set[str]:
     cursor = conn.cursor()
     cursor.execute("SHOW TABLES")
     tables = {row[0].lower() for row in cursor.fetchall()}
-    log.info(f"Discovered ERP tables: {sorted(tables)}")
+    log.info(f"Discovered {len(tables)} ERP tables.")
+    log.debug(f"Tables: {sorted(tables)}")
     return tables
 
 
@@ -231,13 +246,23 @@ def sync_customers(conn) -> int:
     log.info("--- Syncing customers ---")
     cursor = conn.cursor()
 
-    # Synergy cust table uses CustomerCode (int) as the customer number.
-    # SCStatus: 0 = normal, 1 = credit hold. No Active column — sync all.
+    # SStop: 1 = normal, anything > 1 (e.g. 999) = credit hold / stop ship
+    # artermcode JOIN provides human-readable payment terms description
     cursor.execute("""
-        SELECT CustomerCode, Name, Terms, SCStatus,
-               Addr1, Addr2, City, State, Zip4
+        SELECT
+            cust.CustomerCode,
+            cust.Name,
+            artermcode.TermsDescription,
+            cust.SStop,
+            cust.Addr1,
+            cust.Addr2,
+            cust.City,
+            cust.State,
+            cust.Zip4
         FROM cust
-        ORDER BY CustomerCode
+        LEFT JOIN artermcode ON artermcode.xDL4RecNum = cust.Terms
+        WHERE cust.CustomerCode > 0
+        ORDER BY cust.CustomerCode
     """)
 
     rows = cursor.fetchall()
@@ -250,10 +275,10 @@ def sync_customers(conn) -> int:
         )
         customers.append({
             "synergy_id": str(row.CustomerCode).strip(),
-            "name": str(row.Name).strip(),
+            "name": str(row.Name).strip() if row.Name else "",
             "account_number": str(row.CustomerCode).strip(),
-            "ar_terms": str(row.Terms) if row.Terms is not None else None,
-            "credit_hold": row.SCStatus == 1,
+            "ar_terms": safe_str(row.TermsDescription),
+            "credit_hold": (row.SStop is not None and int(row.SStop) > 1),
             "billing_address": billing_address,
             "synced_at": utcnow_iso(),
         })
@@ -271,12 +296,23 @@ def sync_products(conn) -> int:
     log.info("--- Syncing products ---")
     cursor = conn.cursor()
 
+    # Build the IN clause for commodity codes
+    placeholders = ", ".join("?" * len(PRODUCT_COMMODITY_CODES))
+
     try:
-        cursor.execute("""
-            SELECT ProdCode, Desc1, ListPrice1
+        cursor.execute(f"""
+            SELECT
+                prod.ProdCode,
+                prod.Desc1,
+                prod.Desc2,
+                prod.ListPrice1,
+                prod.SupersedeCode
             FROM prod
-            ORDER BY ProdCode
-        """)
+            WHERE prod.ComdtyCode IN ({placeholders})
+              AND (prod.SupersedeCode IS NULL OR prod.SupersedeCode = '')
+              AND (prod.Desc2 NOT LIKE '%OBSOLETE%' OR prod.Desc2 IS NULL)
+            ORDER BY prod.ProdCode
+        """, PRODUCT_COMMODITY_CODES)
     except Exception as e:
         log.warning(f"  Could not query 'prod' table: {e}. Skipping products sync.")
         return 0
@@ -286,10 +322,15 @@ def sync_products(conn) -> int:
 
     products = []
     for row in rows:
+        # Combine Desc1 and Desc2, skip Desc2 if blank
+        desc1 = safe_str(row.Desc1) or ""
+        desc2 = safe_str(row.Desc2)
+        description = (f"{desc1} {desc2}".strip()) if desc2 else desc1 or None
+
         products.append({
             "synergy_id": str(row.ProdCode).strip(),
             "number": str(row.ProdCode).strip(),
-            "description": safe_str(row.Desc1),
+            "description": description,
             "unit_price": float(row.ListPrice1) if row.ListPrice1 is not None else None,
             "synced_at": utcnow_iso(),
         })
@@ -306,17 +347,18 @@ def sync_products(conn) -> int:
 def sync_contacts(conn, known_tables: set[str]) -> int:
     log.info("--- Syncing contacts ---")
 
-    # Synergy stores contacts in 'contlist': CustCode (int), Contact (int id),
-    # FirstName, LastName, Email, Phone (int).
     if "contlist" not in known_tables:
         log.info("  'contlist' table not found. Skipping contacts sync.")
         return 0
 
     cursor = conn.cursor()
     try:
+        # Only sync contacts that have at least an email or a real phone number
         cursor.execute("""
             SELECT CustCode, Contact, FirstName, LastName, Email, Phone
             FROM contlist
+            WHERE (Email IS NOT NULL AND Email != '')
+               OR (Phone IS NOT NULL AND Phone > 0)
             ORDER BY CustCode, Contact
         """)
         rows = cursor.fetchall()
@@ -345,8 +387,8 @@ def sync_contacts(conn, known_tables: set[str]) -> int:
         phone_raw = row.Phone
         phone = str(phone_raw).strip() if phone_raw and int(phone_raw) != 0 else None
 
-        # synergy_id is composite (CustCode-Contact) because Contact is per-customer sequence
-        synergy_id = f"{row.CustCode}-{row.Contact}" if row.Contact is not None else None
+        # Composite synergy_id: CustCode_Contact (underscore separator)
+        synergy_id = f"{row.CustCode}_{row.Contact}" if row.Contact is not None else None
 
         contacts.append({
             "customer_id": customer_id,
@@ -360,7 +402,7 @@ def sync_contacts(conn, known_tables: set[str]) -> int:
     if skipped:
         log.debug(f"  Skipped {skipped} contacts with no matching customer in Supabase.")
 
-    # Deduplicate on synergy_id (some ERP rows have duplicate CustCode+Contact)
+    # Deduplicate on synergy_id (guard against duplicate CustCode+Contact rows in ERP)
     seen: set[str] = set()
     insertable = []
     for c in contacts:
@@ -369,8 +411,8 @@ def sync_contacts(conn, known_tables: set[str]) -> int:
             seen.add(sid)
             insertable.append(c)
 
-    # contacts.synergy_id has a unique index but not a named constraint,
-    # so PostgREST on_conflict doesn't work. Truncate and re-insert each sync.
+    # Truncate and re-insert: contacts has no named unique constraint on synergy_id
+    # that PostgREST can use for on_conflict, so delete-then-insert is cleaner
     if insertable:
         try:
             del_url = f"{SUPABASE_URL}/rest/v1/contacts?id=gte.0"
@@ -456,7 +498,7 @@ def main() -> None:
             log.error(f"Customer sync failed: {e}", exc_info=True)
             failures.append(f"customers: {e}")
 
-        # --- Contacts ---
+        # --- Contacts (depends on customers being in Supabase) ---
         try:
             count = sync_contacts(erp_conn, known_tables)
             total_synced += count
