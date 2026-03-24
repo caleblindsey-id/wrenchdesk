@@ -183,7 +183,7 @@ export default function CreateTicketModal({ open, onClose }: CreateTicketModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
+      <div className="fixed inset-0 bg-black/50" aria-hidden="true" onClick={handleClose} />
       <div className="relative bg-white rounded-lg shadow-lg border border-gray-200 p-6 max-w-lg w-full mx-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-gray-900">New Ticket</h3>

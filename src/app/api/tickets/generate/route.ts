@@ -5,7 +5,9 @@ import { getUser } from '@/lib/db/users'
 
 function scheduleMatchesMonth(schedule: PmScheduleRow, month: number): boolean {
   const { interval_months, anchor_month } = schedule
-  // Offset from anchor, wrapping around year boundary (0-indexed mod 12)
+  // Months elapsed since anchor, wrapping across year boundaries.
+  // e.g. anchor=10 (Oct), interval=3 → matches Oct, Jan, Apr, Jul
+  // e.g. anchor=12 (Dec), interval=6 → matches Dec, Jun
   const offset = ((month - anchor_month) % 12 + 12) % 12
   return offset % interval_months === 0
 }

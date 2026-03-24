@@ -227,7 +227,7 @@ export default function TicketBoard({
             disabled={!assignTo || bulkLoading}
             className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {bulkLoading ? 'Assigning...' : 'Apply'}
+            {bulkLoading ? 'Assigning...' : 'Assign'}
           </button>
         </div>
       )}
