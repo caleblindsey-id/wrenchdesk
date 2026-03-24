@@ -486,6 +486,50 @@ def fetch_customer_synergy_id_map() -> dict[str, int]:
 
 
 # ============================================================
+# Sync: Technicians
+# ============================================================
+
+def sync_technicians(conn) -> int:
+    log.info("--- Syncing technicians ---")
+    cursor = conn.cursor()
+
+    # Sales rep codes 400–450 are the service technicians in Synergy.
+    # Names are stored in ALL CAPS — title-case them on import.
+    # Email in Synergy for these codes is shared/unmaintained, so we
+    # generate a synthetic unique email per code for PM Scheduler use.
+    # These accounts are not Supabase Auth users — they are assignment
+    # targets only and will never log in.
+    cursor.execute("""
+        SELECT SlsmCode, Name
+        FROM sslsm
+        WHERE SlsmCode >= 400 AND SlsmCode <= 450
+          AND Name IS NOT NULL AND TRIM(Name) != ''
+        ORDER BY SlsmCode
+    """)
+
+    rows = cursor.fetchall()
+    log.info(f"  Fetched {len(rows)} technician rows from Synergy.")
+
+    technicians = []
+    for row in rows:
+        code = str(int(row.SlsmCode))
+        name = str(row.Name).strip().title() if row.Name else f"Tech {code}"
+        email = f"tech{code}@imperialdade.com"
+
+        technicians.append({
+            "synergy_id": code,
+            "name": name,
+            "email": email,
+            "role": "technician",
+            "active": True,
+        })
+
+    count = upsert_in_batches(technicians, "users", on_conflict="synergy_id")
+    log.info(f"  Technicians synced: {count}")
+    return count
+
+
+# ============================================================
 # Validation
 # ============================================================
 
@@ -534,6 +578,14 @@ def main() -> None:
         except Exception as e:
             log.error(f"Customer sync failed: {e}", exc_info=True)
             failures.append(f"customers: {e}")
+
+        # --- Technicians ---
+        try:
+            count = sync_technicians(erp_conn)
+            total_synced += count
+        except Exception as e:
+            log.error(f"Technician sync failed: {e}", exc_info=True)
+            failures.append(f"technicians: {e}")
 
         # --- Contacts (depends on customers being in Supabase) ---
         try:

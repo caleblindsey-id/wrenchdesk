@@ -66,6 +66,7 @@ export type UserRow = {
   role: UserRole | null
   active: boolean
   created_at: string
+  synergy_id: string | null
 }
 
 export type EquipmentRow = {
