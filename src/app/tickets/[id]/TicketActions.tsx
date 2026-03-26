@@ -1,9 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { TicketDetail } from '@/lib/db/tickets'
 import { PartUsed, UserRole } from '@/types/database'
+import { createClient } from '@/lib/supabase/client'
+
+interface ProductResult {
+  id: number
+  synergy_id: string
+  number: string
+  description: string | null
+  unit_price: number | null
+}
+
+interface PartEntry {
+  description: string
+  quantity: number
+  unitPrice: number
+  synergyProductId: number | null
+  isFromDb: boolean
+  // Per-part search state
+  searchOpen: boolean
+  searchResults: ProductResult[]
+  searching: boolean
+}
 
 interface TicketActionsProps {
   ticket: TicketDetail
@@ -32,9 +53,28 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
   const [billingAmount, setBillingAmount] = useState(
     isFlatRate && flatRate != null ? String(flatRate) : ''
   )
-  const [parts, setParts] = useState<
-    { description: string; quantity: number; unitPrice: number }[]
-  >([])
+  const [parts, setParts] = useState<PartEntry[]>([])
+
+  const debounceRefs = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
+  const comboRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      comboRefs.current.forEach((el, idx) => {
+        if (el && !el.contains(e.target as Node)) {
+          setParts((prev) => {
+            if (!prev[idx]?.searchOpen) return prev
+            const updated = [...prev]
+            updated[idx] = { ...updated[idx], searchOpen: false }
+            return updated
+          })
+        }
+      })
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   async function handleStart() {
     setLoading(true)
@@ -63,7 +103,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     setError(null)
     try {
       const partsUsed: PartUsed[] = parts.map((p) => ({
-        synergy_product_id: null,
+        synergy_product_id: p.synergyProductId ? Number(p.synergyProductId) : null,
         description: p.description,
         quantity: p.quantity,
         unit_price: p.unitPrice,
@@ -93,27 +133,116 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
   }
 
   function addPart() {
-    setParts([...parts, { description: '', quantity: 1, unitPrice: 0 }])
+    setParts([...parts, {
+      description: '',
+      quantity: 1,
+      unitPrice: 0,
+      synergyProductId: null,
+      isFromDb: false,
+      searchOpen: false,
+      searchResults: [],
+      searching: false,
+    }])
   }
 
-  function updatePart(
+  function handlePartDescriptionChange(index: number, value: string) {
+    const updated = [...parts]
+    updated[index] = {
+      ...updated[index],
+      description: value,
+      // If they're typing, clear any previous DB selection
+      isFromDb: false,
+      synergyProductId: null,
+    }
+    setParts(updated)
+
+    // Debounced product search
+    const existing = debounceRefs.current.get(index)
+    if (existing) clearTimeout(existing)
+
+    if (!value.trim()) {
+      updated[index].searchOpen = false
+      updated[index].searchResults = []
+      setParts([...updated])
+      return
+    }
+
+    debounceRefs.current.set(index, setTimeout(async () => {
+      setParts((prev) => {
+        const u = [...prev]
+        u[index] = { ...u[index], searching: true }
+        return u
+      })
+
+      const supabase = createClient()
+      const q = value.trim()
+      const { data } = await supabase
+        .from('products')
+        .select('id, synergy_id, number, description, unit_price')
+        .or(`number.ilike.%${q}%,description.ilike.%${q}%`)
+        .order('number')
+        .limit(25)
+
+      setParts((prev) => {
+        const u = [...prev]
+        if (u[index]) {
+          u[index] = {
+            ...u[index],
+            searchResults: (data as ProductResult[]) ?? [],
+            searchOpen: true,
+            searching: false,
+          }
+        }
+        return u
+      })
+    }, 300))
+  }
+
+  function selectProduct(index: number, product: ProductResult) {
+    const updated = [...parts]
+    updated[index] = {
+      ...updated[index],
+      description: `${product.number} - ${product.description ?? ''}`,
+      unitPrice: product.unit_price ?? 0,
+      synergyProductId: Number(product.synergy_id),
+      isFromDb: true,
+      searchOpen: false,
+      searchResults: [],
+    }
+    setParts(updated)
+  }
+
+  function clearProduct(index: number) {
+    const updated = [...parts]
+    updated[index] = {
+      ...updated[index],
+      description: '',
+      unitPrice: 0,
+      synergyProductId: null,
+      isFromDb: false,
+    }
+    setParts(updated)
+  }
+
+  function updatePartField(
     index: number,
-    field: 'description' | 'quantity' | 'unitPrice',
+    field: 'quantity' | 'unitPrice',
     value: string | number
   ) {
     const updated = [...parts]
-    if (field === 'description') {
-      updated[index].description = value as string
-    } else if (field === 'quantity') {
-      updated[index].quantity = Number(value)
+    if (field === 'quantity') {
+      updated[index] = { ...updated[index], quantity: Number(value) }
     } else {
-      updated[index].unitPrice = Number(value)
+      updated[index] = { ...updated[index], unitPrice: Number(value) }
     }
     setParts(updated)
   }
 
   function removePart(index: number) {
     setParts(parts.filter((_, i) => i !== index))
+    // Clean up refs
+    debounceRefs.current.delete(index)
+    comboRefs.current.delete(index)
   }
 
   const partsTotal = parts.reduce(
@@ -203,24 +332,69 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             {parts.length > 0 && (
               <div className="space-y-2">
                 {parts.map((part, i) => (
-                  <div key={`new-part-${i}`} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Description"
-                      value={part.description}
-                      onChange={(e) =>
-                        updatePart(i, 'description', e.target.value)
-                      }
-                      className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
-                    />
+                  <div key={`new-part-${i}`} className="flex items-start gap-2">
+                    {/* Description with product search */}
+                    <div
+                      className="flex-1 relative"
+                      ref={(el) => { comboRefs.current.set(i, el) }}
+                    >
+                      {part.isFromDb ? (
+                        <div className="flex items-center gap-1 rounded-md border border-green-300 bg-green-50 px-3 py-1.5 text-sm text-gray-900">
+                          <span className="flex-1 truncate">{part.description}</span>
+                          <button
+                            type="button"
+                            onClick={() => clearProduct(i)}
+                            className="text-gray-400 hover:text-red-500 shrink-0"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Search products or type description..."
+                          value={part.description}
+                          onChange={(e) => handlePartDescriptionChange(i, e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                        />
+                      )}
+                      {part.searchOpen && part.searchResults.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                          {part.searchResults.map((product) => (
+                            <button
+                              key={product.id}
+                              type="button"
+                              onClick={() => selectProduct(i, product)}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                            >
+                              <span className="font-medium text-gray-900">{product.number}</span>
+                              <span className="text-gray-500"> — {product.description ?? ''}</span>
+                              {product.unit_price != null && (
+                                <span className="text-green-700 float-right font-medium">
+                                  ${product.unit_price.toFixed(2)}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {part.searchOpen && !part.searching && part.searchResults.length === 0 && part.description.trim() && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500">
+                          No products found — enter details manually
+                        </div>
+                      )}
+                      {part.searching && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500">
+                          Searching...
+                        </div>
+                      )}
+                    </div>
                     <input
                       type="number"
                       min="1"
                       placeholder="Qty"
                       value={part.quantity}
-                      onChange={(e) =>
-                        updatePart(i, 'quantity', e.target.value)
-                      }
+                      onChange={(e) => updatePartField(i, 'quantity', e.target.value)}
                       className="w-16 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
                     />
                     <input
@@ -229,15 +403,18 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                       min="0"
                       placeholder="Price"
                       value={part.unitPrice}
-                      onChange={(e) =>
-                        updatePart(i, 'unitPrice', e.target.value)
-                      }
-                      className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                      onChange={(e) => updatePartField(i, 'unitPrice', e.target.value)}
+                      readOnly={part.isFromDb}
+                      className={`w-24 rounded-md border px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 ${
+                        part.isFromDb
+                          ? 'border-green-300 bg-green-50 cursor-not-allowed'
+                          : 'border-gray-300'
+                      }`}
                     />
                     <button
                       type="button"
                       onClick={() => removePart(i)}
-                      className="text-gray-400 hover:text-red-500 text-sm"
+                      className="text-gray-400 hover:text-red-500 text-sm mt-1"
                     >
                       Remove
                     </button>
