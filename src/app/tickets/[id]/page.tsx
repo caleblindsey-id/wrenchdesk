@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import TicketActions from './TicketActions'
+import { getCurrentUser, isTechnician } from '@/lib/auth'
+import { getSetting } from '@/lib/db/settings'
 
 export default async function TicketDetailPage({
   params,
@@ -11,9 +13,20 @@ export default async function TicketDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const ticket = await getTicket(id)
+  const [ticket, user, laborRateStr] = await Promise.all([
+    getTicket(id),
+    getCurrentUser(),
+    getSetting('labor_rate_per_hour'),
+  ])
 
   if (!ticket) notFound()
+
+  // Techs can only view their own assigned tickets
+  if (isTechnician(user?.role ?? null) && ticket.assigned_technician_id !== user?.id) {
+    notFound()
+  }
+
+  const laborRate = laborRateStr ? parseFloat(laborRateStr) : 75
 
   const equipmentLabel = [ticket.equipment?.make, ticket.equipment?.model]
     .filter(Boolean)
@@ -99,7 +112,12 @@ export default async function TicketDetailPage({
       </div>
 
       {/* Action section */}
-      <TicketActions ticket={ticket} />
+      <TicketActions
+        ticket={ticket}
+        userRole={user?.role ?? null}
+        userId={user?.id ?? null}
+        laborRate={laborRate}
+      />
     </div>
   )
 }

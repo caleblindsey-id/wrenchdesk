@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { TicketStatus } from '@/types/database'
+import { getCurrentUser, MANAGER_ROLES } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser?.role || !MANAGER_ROLES.includes(currentUser.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json() as {
       equipment_id?: string
       customer_id: number

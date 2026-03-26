@@ -1,7 +1,9 @@
 import { getCustomers } from '@/lib/db/customers'
+import { requireRole } from '@/lib/auth'
 import CustomerList from './CustomerList'
 
 export default async function CustomersPage() {
+  await requireRole('manager', 'coordinator')
   const customers = await getCustomers()
 
   return (

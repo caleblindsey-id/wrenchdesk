@@ -1,7 +1,10 @@
 import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import LayoutShell from '@/components/LayoutShell'
+import { UserProvider } from '@/components/UserProvider'
+import { getCurrentUser } from '@/lib/auth'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -18,18 +21,36 @@ export const metadata: Metadata = {
   description: 'Preventive maintenance scheduling and tracking',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const dbUser = await getCurrentUser()
+
+  // Refresh the pm-role cookie on every full page load
+  if (dbUser?.role) {
+    const cookieStore = await cookies()
+    cookieStore.set('pm-role', dbUser.role, {
+      httpOnly: true,
+      sameSite: 'strict',
+      path: '/',
+    })
+  }
+
+  const userContext = dbUser?.role
+    ? { id: dbUser.id, role: dbUser.role, name: dbUser.name }
+    : null
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="h-full bg-gray-50">
-        <LayoutShell>{children}</LayoutShell>
+        <UserProvider user={userContext}>
+          <LayoutShell>{children}</LayoutShell>
+        </UserProvider>
       </body>
     </html>
   )

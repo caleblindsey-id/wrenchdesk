@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { bulkAssignTechnician } from '@/lib/db/tickets'
+import { getCurrentUser, MANAGER_ROLES } from '@/lib/auth'
 
 interface BulkAssignBody {
   ticketIds: string[]
@@ -8,6 +9,11 @@ interface BulkAssignBody {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser()
+    if (!user?.role || !MANAGER_ROLES.includes(user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await request.json() as BulkAssignBody
     const { ticketIds, technicianId } = body
 

@@ -1,5 +1,6 @@
 import { getEquipmentDetail } from '@/lib/db/equipment'
 import { getUsers } from '@/lib/db/users'
+import { requireRole } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -12,6 +13,7 @@ export default async function EquipmentDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole('manager', 'coordinator')
   const { id } = await params
   const [equipment, users] = await Promise.all([
     getEquipmentDetail(id),

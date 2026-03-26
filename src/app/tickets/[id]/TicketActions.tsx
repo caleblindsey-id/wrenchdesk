@@ -3,13 +3,16 @@
 import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { TicketDetail } from '@/lib/db/tickets'
-import { PartUsed } from '@/types/database'
+import { PartUsed, UserRole } from '@/types/database'
 
 interface TicketActionsProps {
   ticket: TicketDetail
+  userRole: UserRole | null
+  userId: string | null
+  laborRate: number
 }
 
-export default function TicketActions({ ticket }: TicketActionsProps) {
+export default function TicketActions({ ticket, userRole, userId, laborRate }: TicketActionsProps) {
   const router = useRouter()
   const pathname = usePathname()
 
@@ -277,8 +280,8 @@ export default function TicketActions({ ticket }: TicketActionsProps) {
             {(parts.length > 0 || (isFlatRate && parseFloat(hoursWorked) > 0)) && (
               <p className="text-xs text-gray-500 mt-1">
                 {isFlatRate
-                  ? `Suggested: $${(flatRate! + partsTotal + (parseFloat(hoursWorked) || 0) * 75).toFixed(2)} (flat rate + additional parts + $75/hr labor)`
-                  : `Suggested (T&M): $${(partsTotal + (parseFloat(hoursWorked) || 0) * 75).toFixed(2)} (parts + $75/hr labor)`
+                  ? `Suggested: $${(flatRate! + partsTotal + (parseFloat(hoursWorked) || 0) * laborRate).toFixed(2)} (flat rate + additional parts + $${laborRate}/hr labor)`
+                  : `Suggested (T&M): $${(partsTotal + (parseFloat(hoursWorked) || 0) * laborRate).toFixed(2)} (parts + $${laborRate}/hr labor)`
                 }
               </p>
             )}

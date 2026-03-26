@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getTickets } from '@/lib/db/tickets'
+import { getCurrentUser, isTechnician } from '@/lib/auth'
 import {
   ClipboardList,
   UserCheck,
@@ -12,7 +13,7 @@ import StatusBadge from '@/components/StatusBadge'
 import SyncStatusBanner from '@/components/SyncStatusBanner'
 import { TicketStatus } from '@/types/database'
 
-const statusCards: {
+const allStatusCards: {
   status: TicketStatus
   label: string
   icon: typeof ClipboardList
@@ -25,12 +26,24 @@ const statusCards: {
   { status: 'billed', label: 'Billed', icon: Receipt, color: 'text-purple-500' },
 ]
 
+// Techs don't see unassigned tickets — they can't act on them
+const techStatusCards = allStatusCards.filter((c) => c.status !== 'unassigned')
+
 export default async function DashboardPage() {
   const now = new Date()
   const month = now.getMonth() + 1
   const year = now.getFullYear()
 
-  const tickets = await getTickets({ month, year })
+  const user = await getCurrentUser()
+  const isTech = isTechnician(user?.role ?? null)
+
+  const tickets = await getTickets({
+    month,
+    year,
+    ...(isTech && user ? { technicianId: user.id } : {}),
+  })
+
+  const statusCards = isTech ? techStatusCards : allStatusCards
 
   const counts: Record<TicketStatus, number> = {
     unassigned: 0,
@@ -44,7 +57,9 @@ export default async function DashboardPage() {
   }
 
   const upcoming = tickets.filter(
-    (t) => t.status === 'unassigned' || t.status === 'assigned'
+    (t) => isTech
+      ? t.status === 'assigned' || t.status === 'in_progress'
+      : t.status === 'unassigned' || t.status === 'assigned'
   )
 
   const monthName = now.toLocaleString('default', { month: 'long' })
@@ -88,7 +103,9 @@ export default async function DashboardPage() {
             Upcoming PMs
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Unassigned and assigned tickets for {monthName}
+            {isTech
+              ? `Your assigned and in-progress tickets for ${monthName}`
+              : `Unassigned and assigned tickets for ${monthName}`}
           </p>
         </div>
         {upcoming.length === 0 ? (

@@ -1,12 +1,16 @@
 import { getUsers } from '@/lib/db/users'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole } from '@/lib/auth'
+import { getSetting } from '@/lib/db/settings'
 import { SyncLogRow } from '@/types/database'
 import SettingsContent from './SettingsContent'
 
 export default async function SettingsPage() {
-  const [users, syncLog] = await Promise.all([
+  await requireRole('manager', 'coordinator')
+  const [users, syncLog, laborRate] = await Promise.all([
     getUsers(),
     getSyncLog(),
+    getSetting('labor_rate_per_hour'),
   ])
 
   return (
@@ -17,7 +21,11 @@ export default async function SettingsPage() {
           Manage users and view sync history
         </p>
       </div>
-      <SettingsContent users={users} syncLog={syncLog} />
+      <SettingsContent
+        users={users}
+        syncLog={syncLog}
+        laborRate={laborRate ?? '75'}
+      />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { completeTicket } from '@/lib/db/tickets'
+import { getCurrentUser, isTechnician } from '@/lib/auth'
 import { PartUsed } from '@/types/database'
 
 interface CompleteTicketBody {
@@ -28,16 +29,26 @@ export async function POST(
       )
     }
 
+    const user = await getCurrentUser()
+    if (!user?.role) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     // Prevent overwriting already-completed or billed tickets
     const supabase = await createClient()
     const { data: current, error: fetchError } = await supabase
       .from('pm_tickets')
-      .select('status')
+      .select('status, assigned_technician_id')
       .eq('id', id)
       .single()
 
     if (fetchError || !current) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
+    }
+
+    // Techs can only complete their own assigned tickets
+    if (isTechnician(user.role) && current.assigned_technician_id !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     if (current.status === 'completed' || current.status === 'billed') {

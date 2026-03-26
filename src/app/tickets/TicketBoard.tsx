@@ -28,6 +28,7 @@ interface TicketBoardProps {
   users: UserRow[]
   currentMonth: number
   currentYear: number
+  userRole: import('@/types/database').UserRole | null
 }
 
 export default function TicketBoard({
@@ -35,7 +36,9 @@ export default function TicketBoard({
   users,
   currentMonth,
   currentYear,
+  userRole,
 }: TicketBoardProps) {
+  const isManager = userRole === 'manager' || userRole === 'coordinator'
   const router = useRouter()
   const thisYear = new Date().getFullYear()
 
@@ -151,19 +154,21 @@ export default function TicketBoard({
               ))}
             </select>
           </div>
-          <div className="w-full lg:w-auto">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Technician</label>
-            <select
-              value={techFilter}
-              onChange={(e) => setTechFilter(e.target.value)}
-              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
-            >
-              <option value="">All Technicians</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-          </div>
+          {isManager && (
+            <div className="w-full lg:w-auto">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Technician</label>
+              <select
+                value={techFilter}
+                onChange={(e) => setTechFilter(e.target.value)}
+                className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              >
+                <option value="">All Technicians</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="w-full lg:w-auto">
             <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
             <select
@@ -182,20 +187,22 @@ export default function TicketBoard({
           >
             Apply
           </button>
-          <div className="w-full lg:w-auto lg:ml-auto flex gap-2">
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors"
-            >
-              New Ticket
-            </button>
-            <button
-              onClick={() => setGenerateOpen(true)}
-              className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
-            >
-              Generate {MONTHS[month - 1]} PMs
-            </button>
-          </div>
+          {isManager && (
+            <div className="w-full lg:w-auto lg:ml-auto flex gap-2">
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors"
+              >
+                New Ticket
+              </button>
+              <button
+                onClick={() => setGenerateOpen(true)}
+                className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+              >
+                Generate {MONTHS[month - 1]} PMs
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -206,8 +213,8 @@ export default function TicketBoard({
         </div>
       )}
 
-      {/* Bulk assign */}
-      {selected.size > 0 && (
+      {/* Bulk assign — managers only */}
+      {isManager && selected.size > 0 && (
         <div className="bg-blue-50 rounded-lg border border-blue-200 p-3 flex items-center gap-3">
           <span className="text-sm text-blue-800 font-medium">
             {selected.size} ticket{selected.size > 1 ? 's' : ''} selected
@@ -278,14 +285,16 @@ export default function TicketBoard({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="px-4 py-3 text-left">
-                      <input
-                        type="checkbox"
-                        checked={selected.size === tickets.length && tickets.length > 0}
-                        onChange={toggleAll}
-                        className="rounded border-gray-300"
-                      />
-                    </th>
+                    {isManager && (
+                      <th className="px-4 py-3 text-left">
+                        <input
+                          type="checkbox"
+                          checked={selected.size === tickets.length && tickets.length > 0}
+                          onChange={toggleAll}
+                          className="rounded border-gray-300"
+                        />
+                      </th>
+                    )}
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Equipment</th>
@@ -300,17 +309,19 @@ export default function TicketBoard({
                       className="hover:bg-gray-50 cursor-pointer"
                       onClick={() => router.push(`/tickets/${ticket.id}`)}
                     >
-                      <td
-                        className="px-4 py-3"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected.has(ticket.id)}
-                          onChange={() => toggleSelect(ticket.id)}
-                          className="rounded border-gray-300"
-                        />
-                      </td>
+                      {isManager && (
+                        <td
+                          className="px-4 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected.has(ticket.id)}
+                            onChange={() => toggleSelect(ticket.id)}
+                            className="rounded border-gray-300"
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <StatusBadge status={ticket.status} />
                       </td>

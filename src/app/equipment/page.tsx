@@ -1,7 +1,9 @@
 import { getEquipment } from '@/lib/db/equipment'
+import { requireRole } from '@/lib/auth'
 import EquipmentList from './EquipmentList'
 
 export default async function EquipmentPage() {
+  await requireRole('manager', 'coordinator')
   const equipment = await getEquipment()
 
   return (

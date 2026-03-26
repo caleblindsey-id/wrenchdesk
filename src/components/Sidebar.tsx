@@ -13,8 +13,9 @@ import {
   LogOut,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useUser } from '@/components/UserProvider'
 
-const navItems = [
+const allNavItems = [
   { label: 'Dashboard', icon: LayoutDashboard, route: '/' },
   { label: 'Tickets', icon: ClipboardList, route: '/tickets' },
   { label: 'Equipment', icon: Wrench, route: '/equipment' },
@@ -22,6 +23,11 @@ const navItems = [
   { label: 'Products', icon: Package, route: '/products' },
   { label: 'Billing', icon: FileText, route: '/billing' },
   { label: 'Settings', icon: Settings, route: '/settings' },
+]
+
+const techNavItems = [
+  { label: 'Dashboard', icon: LayoutDashboard, route: '/' },
+  { label: 'My Tickets', icon: ClipboardList, route: '/tickets' },
 ]
 
 interface SidebarProps {
@@ -32,6 +38,8 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const user = useUser()
+  const navItems = user?.role === 'technician' ? techNavItems : allNavItems
 
   async function handleLogout() {
     const supabase = createClient()

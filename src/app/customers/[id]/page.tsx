@@ -1,5 +1,6 @@
 import { getCustomer } from '@/lib/db/customers'
 import { getEquipment } from '@/lib/db/equipment'
+import { requireRole } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -10,6 +11,7 @@ export default async function CustomerDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole('manager', 'coordinator')
   const { id } = await params
   const customerId = parseInt(id)
   if (isNaN(customerId)) notFound()

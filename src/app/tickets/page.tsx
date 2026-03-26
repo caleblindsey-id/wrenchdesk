@@ -1,6 +1,7 @@
 import { getTickets } from '@/lib/db/tickets'
 import { getUsers } from '@/lib/db/users'
-import { TicketStatus } from '@/types/database'
+import { getCurrentUser, isTechnician } from '@/lib/auth'
+import { TicketStatus, UserRole } from '@/types/database'
 import TicketBoard from './TicketBoard'
 
 export default async function TicketsPage({
@@ -13,8 +14,16 @@ export default async function TicketsPage({
   const month = params.month ? parseInt(params.month) : now.getMonth() + 1
   const year = params.year ? parseInt(params.year) : now.getFullYear()
 
+  const user = await getCurrentUser()
+  const isTech = isTechnician(user?.role ?? null)
+
   const filters: Parameters<typeof getTickets>[0] = { month, year }
-  if (params.tech) filters!.technicianId = params.tech
+  // Techs always see only their own tickets
+  if (isTech && user) {
+    filters!.technicianId = user.id
+  } else if (params.tech) {
+    filters!.technicianId = params.tech
+  }
   if (params.status) filters!.status = params.status as TicketStatus
 
   let tickets: Awaited<ReturnType<typeof getTickets>> = []
@@ -44,6 +53,7 @@ export default async function TicketsPage({
         users={users}
         currentMonth={month}
         currentYear={year}
+        userRole={user?.role ?? null}
       />
     </div>
   )

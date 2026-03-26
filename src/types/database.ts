@@ -170,6 +170,12 @@ export type PmTicketInsert = MakeOptional<
   'status' | 'billing_exported' | 'parts_used' | 'pm_schedule_id' | 'equipment_id' | 'customer_id' | 'assigned_technician_id' | 'created_by_id' | 'scheduled_date' | 'completed_date' | 'completion_notes' | 'hours_worked' | 'billing_amount'
 >
 
+export type SettingsRow = {
+  key: string
+  value: string
+  updated_at: string
+}
+
 export type SyncLogInsert = Omit<SyncLogRow, 'id'>
 
 // ============================================================
@@ -315,6 +321,12 @@ export interface Database {
             referencedColumns: ['id']
           },
         ]
+      }
+      settings: {
+        Row: SettingsRow
+        Insert: SettingsRow
+        Update: Partial<SettingsRow>
+        Relationships: []
       }
       sync_log: {
         Row: SyncLogRow
