@@ -11,6 +11,7 @@ import {
   FileText,
   Settings,
   LogOut,
+  UserRoundSearch,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/components/UserProvider'
@@ -20,6 +21,7 @@ const allNavItems = [
   { label: 'Tickets', icon: ClipboardList, route: '/tickets' },
   { label: 'Equipment', icon: Wrench, route: '/equipment' },
   { label: 'Customers', icon: Building2, route: '/customers' },
+  { label: 'Prospects', icon: UserRoundSearch, route: '/prospects' },
   { label: 'Products', icon: Package, route: '/products' },
   { label: 'Billing', icon: FileText, route: '/billing' },
   { label: 'Settings', icon: Settings, route: '/settings' },

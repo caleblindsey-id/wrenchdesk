@@ -7,6 +7,7 @@ import {
   Play,
   CheckCircle,
   Receipt,
+  SkipForward,
   ChevronRight,
 } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
@@ -24,6 +25,7 @@ const allStatusCards: {
   { status: 'in_progress', label: 'In Progress', icon: Play, color: 'text-orange-500' },
   { status: 'completed', label: 'Completed', icon: CheckCircle, color: 'text-green-500' },
   { status: 'billed', label: 'Billed', icon: Receipt, color: 'text-purple-500' },
+  { status: 'skipped', label: 'Skipped', icon: SkipForward, color: 'text-gray-400' },
 ]
 
 // Techs don't see unassigned tickets — they can't act on them
@@ -51,6 +53,7 @@ export default async function DashboardPage() {
     in_progress: 0,
     completed: 0,
     billed: 0,
+    skipped: 0,
   }
   for (const t of tickets) {
     counts[t.status]++

@@ -33,6 +33,10 @@ export default function AddEquipmentModal({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const comboRef = useRef<HTMLDivElement>(null)
 
+  // Ship-to location state
+  const [shipToLocations, setShipToLocations] = useState<{id: number; name: string | null; city: string | null}[]>([])
+  const [shipToLocationId, setShipToLocationId] = useState('')
+
   const [make, setMake] = useState('')
   const [model, setModel] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
@@ -74,6 +78,22 @@ export default function AddEquipmentModal({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Load ship-to locations when customer changes
+  useEffect(() => {
+    setShipToLocationId('')
+    setShipToLocations([])
+    if (!customerId) return
+    const supabase = createClient()
+    supabase
+      .from('ship_to_locations')
+      .select('id, name, city')
+      .eq('customer_id', parseInt(customerId))
+      .order('name')
+      .then(({ data }) => {
+        setShipToLocations(data ?? [])
+      })
+  }, [customerId])
+
   function selectCustomer(c: CustomerOption) {
     setCustomerId(String(c.id))
     setCustomerSearch(c.account_number ? `${c.name} (${c.account_number})` : c.name)
@@ -85,6 +105,8 @@ export default function AddEquipmentModal({
     setCustomerId('')
     setCustomerResults([])
     setComboOpen(false)
+    setShipToLocationId('')
+    setShipToLocations([])
     setMake('')
     setModel('')
     setSerialNumber('')
@@ -101,6 +123,7 @@ export default function AddEquipmentModal({
     const supabase = createClient()
     const { error: insertError } = await supabase.from('equipment').insert({
       customer_id: customerId ? parseInt(customerId) : null,
+      ship_to_location_id: shipToLocationId ? parseInt(shipToLocationId) : null,
       make: make || null,
       model: model || null,
       serial_number: serialNumber || null,
@@ -187,6 +210,27 @@ export default function AddEquipmentModal({
             )}
           </div>
 
+          {/* Ship-To Location */}
+          {customerId && shipToLocations.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ship-To Location
+              </label>
+              <select
+                value={shipToLocationId}
+                onChange={(e) => setShipToLocationId(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              >
+                <option value="">Select location...</option>
+                {shipToLocations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name ?? 'Unnamed'}{loc.city ? ` — ${loc.city}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -213,23 +257,23 @@ export default function AddEquipmentModal({
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Serial Number
-            </label>
-            <input
-              type="text"
-              value={serialNumber}
-              onChange={(e) => setSerialNumber(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
               Description
             </label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Serial Number
+            </label>
+            <input
+              type="text"
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
             />
           </div>

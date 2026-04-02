@@ -21,6 +21,10 @@ const statusConfig: Record<TicketStatus, { label: string; classes: string }> = {
     label: 'Billed',
     classes: 'bg-purple-100 text-purple-800',
   },
+  skipped: {
+    label: 'Skipped',
+    classes: 'bg-gray-100 text-gray-800',
+  },
 }
 
 export default function StatusBadge({ status }: { status: TicketStatus }) {

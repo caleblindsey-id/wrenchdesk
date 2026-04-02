@@ -4,7 +4,7 @@
 
 export type UserRole = 'manager' | 'coordinator' | 'technician'
 
-export type TicketStatus = 'unassigned' | 'assigned' | 'in_progress' | 'completed' | 'billed'
+export type TicketStatus = 'unassigned' | 'assigned' | 'in_progress' | 'completed' | 'billed' | 'skipped'
 
 export type BillingType = 'flat_rate' | 'time_and_materials' | 'contract'
 
@@ -37,6 +37,8 @@ export type CustomerRow = {
   ar_terms: string | null
   credit_hold: boolean
   billing_address: string | null
+  po_required: boolean
+  active: boolean
   synced_at: string | null
 }
 
@@ -48,6 +50,21 @@ export type ContactRow = {
   email: string | null
   phone: string | null
   is_primary: boolean
+}
+
+export type ShipToLocationRow = {
+  id: number
+  customer_id: number | null
+  synergy_customer_code: string
+  synergy_shiplist_code: string
+  name: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  contact: string | null
+  email: string | null
+  synced_at: string | null
 }
 
 export type ProductRow = {
@@ -73,6 +90,7 @@ export type EquipmentRow = {
   id: string
   customer_id: number | null
   default_technician_id: string | null
+  ship_to_location_id: number | null
   make: string | null
   model: string | null
   serial_number: string | null
@@ -111,6 +129,8 @@ export type PmTicketRow = {
   parts_used: PartUsed[]
   billing_amount: number | null
   billing_exported: boolean
+  parent_ticket_id: string | null
+  ticket_type: 'pm' | 'service_request'
   created_at: string
   updated_at: string
 }
@@ -137,7 +157,7 @@ type MakeOptional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 
 export type CustomerInsert = MakeOptional<
   Omit<CustomerRow, 'id'>,
-  'credit_hold' | 'synced_at' | 'account_number' | 'ar_terms' | 'billing_address'
+  'credit_hold' | 'synced_at' | 'account_number' | 'ar_terms' | 'billing_address' | 'po_required' | 'active'
 >
 
 export type ContactInsert = MakeOptional<
@@ -157,7 +177,7 @@ export type UserInsert = MakeOptional<
 
 export type EquipmentInsert = MakeOptional<
   Omit<EquipmentRow, 'id' | 'created_at' | 'updated_at'>,
-  'active' | 'customer_id' | 'default_technician_id' | 'make' | 'model' | 'serial_number' | 'description' | 'location_on_site'
+  'active' | 'customer_id' | 'default_technician_id' | 'ship_to_location_id' | 'make' | 'model' | 'serial_number' | 'description' | 'location_on_site'
 >
 
 export type PmScheduleInsert = MakeOptional<
@@ -167,7 +187,7 @@ export type PmScheduleInsert = MakeOptional<
 
 export type PmTicketInsert = MakeOptional<
   Omit<PmTicketRow, 'id' | 'created_at' | 'updated_at'>,
-  'status' | 'billing_exported' | 'parts_used' | 'pm_schedule_id' | 'equipment_id' | 'customer_id' | 'assigned_technician_id' | 'created_by_id' | 'scheduled_date' | 'completed_date' | 'completion_notes' | 'hours_worked' | 'billing_amount'
+  'status' | 'billing_exported' | 'parts_used' | 'pm_schedule_id' | 'equipment_id' | 'customer_id' | 'assigned_technician_id' | 'created_by_id' | 'scheduled_date' | 'completed_date' | 'completion_notes' | 'hours_worked' | 'billing_amount' | 'parent_ticket_id' | 'ticket_type'
 >
 
 export type SettingsRow = {
@@ -233,6 +253,20 @@ export interface Database {
           },
         ]
       }
+      ship_to_locations: {
+        Row: ShipToLocationRow
+        Insert: Omit<ShipToLocationRow, 'id'>
+        Update: Partial<Omit<ShipToLocationRow, 'id'>>
+        Relationships: [
+          {
+            foreignKeyName: 'ship_to_locations_customer_id_fkey'
+            columns: ['customer_id']
+            isOneToOne: false
+            referencedRelation: 'customers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       products: {
         Row: ProductRow
         Insert: ProductInsert
@@ -262,6 +296,13 @@ export interface Database {
             columns: ['default_technician_id']
             isOneToOne: false
             referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'equipment_ship_to_location_id_fkey'
+            columns: ['ship_to_location_id']
+            isOneToOne: false
+            referencedRelation: 'ship_to_locations'
             referencedColumns: ['id']
           },
         ]

@@ -54,3 +54,17 @@ export async function deactivateSchedule(id: string): Promise<void> {
 
   if (error) throw error
 }
+
+export async function updateAnchorMonth(
+  id: string,
+  anchorMonth: number
+): Promise<void> {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('pm_schedules')
+    .update({ anchor_month: anchorMonth })
+    .eq('id', id)
+
+  if (error) throw error
+}

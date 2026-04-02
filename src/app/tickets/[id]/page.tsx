@@ -85,6 +85,12 @@ export default async function TicketDetailPage({
             </p>
           </div>
           <div>
+            <span className="text-gray-500">City</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.equipment?.ship_to_locations?.city ?? '—'}
+            </p>
+          </div>
+          <div>
             <span className="text-gray-500">Scheduled Date</span>
             <p className="text-gray-900 font-medium">
               {ticket.scheduled_date

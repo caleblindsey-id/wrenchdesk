@@ -8,9 +8,10 @@ import { EquipmentRow, UserRow } from '@/types/database'
 interface EquipmentFormProps {
   equipment: EquipmentRow & { customers: { name: string } | null }
   users: UserRow[]
+  shipToLocations: {id: number; name: string | null; city: string | null}[]
 }
 
-export default function EquipmentForm({ equipment, users }: EquipmentFormProps) {
+export default function EquipmentForm({ equipment, users, shipToLocations }: EquipmentFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,6 +22,7 @@ export default function EquipmentForm({ equipment, users }: EquipmentFormProps) 
   const [serialNumber, setSerialNumber] = useState(equipment.serial_number ?? '')
   const [description, setDescription] = useState(equipment.description ?? '')
   const [locationOnSite, setLocationOnSite] = useState(equipment.location_on_site ?? '')
+  const [shipToLocationId, setShipToLocationId] = useState(String(equipment.ship_to_location_id ?? ''))
   const [defaultTechId, setDefaultTechId] = useState(equipment.default_technician_id ?? '')
   const [active, setActive] = useState(equipment.active)
 
@@ -39,9 +41,10 @@ export default function EquipmentForm({ equipment, users }: EquipmentFormProps) 
         serial_number: serialNumber || null,
         description: description || null,
         location_on_site: locationOnSite || null,
+        ship_to_location_id: shipToLocationId ? parseInt(shipToLocationId) : null,
         default_technician_id: defaultTechId || null,
         active,
-      } )
+      })
       .eq('id', equipment.id)
 
     if (updateError) {
@@ -82,6 +85,17 @@ export default function EquipmentForm({ equipment, users }: EquipmentFormProps) 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Location on Site</label>
           <input type="text" value={locationOnSite} onChange={(e) => setLocationOnSite(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Ship-To Location</label>
+          <select value={shipToLocationId} onChange={(e) => setShipToLocationId(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500">
+            <option value="">None</option>
+            {shipToLocations.map((loc) => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name ?? 'Unnamed'}{loc.city ? ` — ${loc.city}` : ''}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Default Technician</label>

@@ -4,7 +4,7 @@ import CustomerList from './CustomerList'
 
 export default async function CustomersPage() {
   await requireRole('manager', 'coordinator')
-  const customers = await getCustomers()
+  const customers = await getCustomers() // first 50, ordered by name
 
   return (
     <div className="p-6 space-y-6">

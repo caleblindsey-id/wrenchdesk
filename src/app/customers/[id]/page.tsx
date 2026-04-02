@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import CreditHoldBadge from '@/components/CreditHoldBadge'
+import ActiveToggle from './ActiveToggle'
 
 export default async function CustomerDetailPage({
   params,
@@ -40,6 +41,7 @@ export default async function CustomerDetailPage({
             Account: {customer.account_number ?? '—'}
           </p>
         </div>
+        <ActiveToggle customerId={customer.id} isActive={customer.active} />
       </div>
 
       {customer.credit_hold && (

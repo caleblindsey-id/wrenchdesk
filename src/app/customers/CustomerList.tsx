@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { CustomerRow } from '@/types/database'
 import CreditHoldBadge from '@/components/CreditHoldBadge'
+import { createClient } from '@/lib/supabase/client'
 
 interface CustomerListProps {
   customers: CustomerRow[]
@@ -13,19 +14,41 @@ interface CustomerListProps {
 export default function CustomerList({ customers }: CustomerListProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
+  const [displayedCustomers, setDisplayedCustomers] = useState<CustomerRow[]>(customers)
+  const [searching, setSearching] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const filtered = customers.filter((c) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      c.name.toLowerCase().includes(q) ||
-      (c.account_number?.toLowerCase().includes(q) ?? false)
-    )
-  })
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    if (!search.trim()) {
+      setDisplayedCustomers(customers)
+      setSearching(false)
+      return
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true)
+      const supabase = createClient()
+      const q = search.trim()
+      const { data } = await supabase
+        .from('customers')
+        .select('*')
+        .or(`name.ilike.%${q}%,account_number.ilike.%${q}%`)
+        .order('name')
+        .limit(50)
+      setDisplayedCustomers(data ?? [])
+      setSearching(false)
+    }, 300)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [search, customers])
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center gap-3">
         <input
           type="text"
           placeholder="Search by customer name or account number..."
@@ -33,10 +56,13 @@ export default function CustomerList({ customers }: CustomerListProps) {
           onChange={(e) => setSearch(e.target.value)}
           className="w-full max-w-md rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-slate-500"
         />
+        {searching && (
+          <span className="text-sm text-gray-400 shrink-0">Searching...</span>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        {filtered.length === 0 ? (
+        {displayedCustomers.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
             No customers found.
           </div>
@@ -44,7 +70,7 @@ export default function CustomerList({ customers }: CustomerListProps) {
           <>
             {/* Mobile cards — hidden on desktop */}
             <div className="lg:hidden divide-y divide-gray-100">
-              {filtered.map((c) => (
+              {displayedCustomers.map((c) => (
                 <div
                   key={c.id}
                   className="px-4 py-3 cursor-pointer active:bg-gray-50"
@@ -86,7 +112,7 @@ export default function CustomerList({ customers }: CustomerListProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filtered.map((c) => (
+                  {displayedCustomers.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-50">
                       <td className="px-5 py-3 text-gray-600 font-mono text-xs">
                         {c.account_number ?? '—'}

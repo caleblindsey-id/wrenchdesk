@@ -37,12 +37,20 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
   const router = useRouter()
   const pathname = usePathname()
 
+  const isTech = userRole === 'technician'
+
   const billingType = ticket.schedule?.billing_type ?? null
   const flatRate = ticket.schedule?.flat_rate ?? null
   const isFlatRate = billingType === 'flat_rate' && flatRate != null
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Service request state
+  const [serviceRequestOpen, setServiceRequestOpen] = useState(false)
+  const [serviceRequestDesc, setServiceRequestDesc] = useState('')
+  const [serviceRequestLoading, setServiceRequestLoading] = useState(false)
+  const [serviceRequestSuccess, setServiceRequestSuccess] = useState(false)
 
   // Completion form state
   const [completedDate, setCompletedDate] = useState(
@@ -117,7 +125,9 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           hoursWorked: parseFloat(hoursWorked) || 0,
           partsUsed,
           completionNotes,
-          billingAmount: parseFloat(billingAmount) || 0,
+          billingAmount: isTech
+            ? (isFlatRate ? flatRate! : 0)
+            : (parseFloat(billingAmount) || 0),
         }),
       })
       if (!res.ok) {
@@ -129,6 +139,35 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleServiceRequest(e: React.FormEvent) {
+    e.preventDefault()
+    if (!serviceRequestDesc.trim()) return
+    setServiceRequestLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/tickets/service-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parentTicketId: ticket.id,
+          description: serviceRequestDesc.trim(),
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to create service request')
+      }
+      setServiceRequestDesc('')
+      setServiceRequestOpen(false)
+      setServiceRequestSuccess(true)
+      setTimeout(() => setServiceRequestSuccess(false), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setServiceRequestLoading(false)
     }
   }
 
@@ -203,7 +242,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     updated[index] = {
       ...updated[index],
       description: `${product.number} - ${product.description ?? ''}`,
-      unitPrice: product.unit_price ?? 0,
+      unitPrice: isTech ? 0 : (product.unit_price ?? 0),
       synergyProductId: Number(product.synergy_id),
       isFromDb: true,
       searchOpen: false,
@@ -250,238 +289,312 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     0
   )
 
-  // Unassigned or assigned: show Start button
-  if (ticket.status === 'unassigned' || ticket.status === 'assigned') {
+  function ServiceRequestSection() {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
-          Actions
+          Additional Service
         </h2>
-        {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-        <button
-          onClick={handleStart}
-          disabled={loading}
-          className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors min-h-[44px]"
-        >
-          {loading ? 'Starting...' : 'Start Work'}
-        </button>
+        {serviceRequestSuccess && (
+          <p className="text-sm text-green-600 mb-3">Service request created successfully.</p>
+        )}
+        {!serviceRequestOpen ? (
+          <button
+            onClick={() => setServiceRequestOpen(true)}
+            className="px-4 py-3 sm:py-2 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors min-h-[44px]"
+          >
+            Request Additional Service
+          </button>
+        ) : (
+          <form onSubmit={handleServiceRequest} className="space-y-3 max-w-xl">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description of Additional Work Needed
+              </label>
+              <textarea
+                value={serviceRequestDesc}
+                onChange={(e) => setServiceRequestDesc(e.target.value)}
+                rows={3}
+                required
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                placeholder="Describe the additional work diagnosed on-site..."
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={serviceRequestLoading}
+                className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors min-h-[44px]"
+              >
+                {serviceRequestLoading ? 'Creating...' : 'Submit Request'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setServiceRequestOpen(false); setServiceRequestDesc('') }}
+                className="px-4 py-3 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors min-h-[44px]"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
       </div>
+    )
+  }
+
+  // Unassigned or assigned: show Start button
+  if (ticket.status === 'unassigned' || ticket.status === 'assigned') {
+    return (
+      <>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
+            Actions
+          </h2>
+          {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+          <button
+            onClick={handleStart}
+            disabled={loading}
+            className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors min-h-[44px]"
+          >
+            {loading ? 'Starting...' : 'Start Work'}
+          </button>
+        </div>
+        <ServiceRequestSection />
+      </>
     )
   }
 
   // In progress: show completion form
   if (ticket.status === 'in_progress') {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
-          Complete Ticket
-        </h2>
-        {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-        <form onSubmit={handleComplete} className="space-y-4 max-w-xl">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Completion Date
-            </label>
-            <input
-              type="date"
-              required
-              value={completedDate}
-              onChange={(e) => setCompletedDate(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Hours Worked
-            </label>
-            <input
-              type="number"
-              step="0.25"
-              min="0"
-              required
-              value={hoursWorked}
-              onChange={(e) => setHoursWorked(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
-              placeholder="0.00"
-            />
-          </div>
-
-          {/* Flat rate base — informational, shown above additional work */}
-          {isFlatRate && (
-            <div className="flex items-center justify-between py-2 px-3 bg-blue-50 rounded-md border border-blue-100">
-              <span className="text-sm font-medium text-blue-800">PM Service (Flat Rate)</span>
-              <span className="text-sm font-semibold text-blue-800">${flatRate!.toFixed(2)}</span>
-            </div>
-          )}
-
-          {/* Parts */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">
-                {isFlatRate ? 'Additional Work (beyond PM agreement)' : 'Parts Used'}
+      <>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
+            Complete Ticket
+          </h2>
+          {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+          <form onSubmit={handleComplete} className="space-y-4 max-w-xl">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Completion Date
               </label>
-              <button
-                type="button"
-                onClick={addPart}
-                className="text-xs font-medium text-slate-700 hover:text-slate-900 py-2 sm:py-0 min-h-[44px] sm:min-h-0 flex items-center"
-              >
-                + Add Part
-              </button>
+              <input
+                type="date"
+                required
+                value={completedDate}
+                onChange={(e) => setCompletedDate(e.target.value)}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+              />
             </div>
-            {parts.length > 0 && (
-              <div className="space-y-2">
-                {parts.map((part, i) => (
-                  <div key={`new-part-${i}`} className="rounded-md border border-gray-200 p-3 space-y-2 sm:border-0 sm:p-0 sm:space-y-0 sm:flex sm:items-start sm:gap-2">
-                    {/* Description with product search */}
-                    <div
-                      className="relative sm:flex-1"
-                      ref={(el) => { comboRefs.current.set(i, el) }}
-                    >
-                      {part.isFromDb ? (
-                        <div className="flex items-center gap-1 rounded-md border border-green-300 bg-green-50 px-3 py-2.5 sm:py-1.5 text-sm text-gray-900">
-                          <span className="flex-1 truncate">{part.description}</span>
-                          <button
-                            type="button"
-                            onClick={() => clearProduct(i)}
-                            className="text-gray-400 hover:text-red-500 shrink-0 p-1"
-                          >
-                            &times;
-                          </button>
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          placeholder="Search products or type description..."
-                          value={part.description}
-                          onChange={(e) => handlePartDescriptionChange(i, e.target.value)}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2.5 sm:py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
-                        />
-                      )}
-                      {part.searchOpen && part.searchResults.length > 0 && (
-                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                          {part.searchResults.map((product) => (
-                            <button
-                              key={product.id}
-                              type="button"
-                              onClick={() => selectProduct(i, product)}
-                              className="w-full text-left px-3 py-3 sm:py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                            >
-                              <span className="font-medium text-gray-900">{product.number}</span>
-                              <span className="text-gray-500"> — {product.description ?? ''}</span>
-                              {product.unit_price != null && (
-                                <span className="text-green-700 sm:float-right font-medium block sm:inline mt-0.5 sm:mt-0">
-                                  ${product.unit_price.toFixed(2)}
-                                </span>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {part.searchOpen && !part.searching && part.searchResults.length === 0 && part.description.trim() && (
-                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2.5 text-sm text-gray-500">
-                          No products found — enter details manually
-                        </div>
-                      )}
-                      {part.searching && (
-                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2.5 text-sm text-gray-500">
-                          Searching...
-                        </div>
-                      )}
-                    </div>
-                    {/* Qty + Price + Remove row */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 sm:flex-none">
-                        <label className="block text-xs text-gray-500 mb-0.5 sm:hidden">Qty</label>
-                        <input
-                          type="number"
-                          min="1"
-                          placeholder="Qty"
-                          value={part.quantity}
-                          onChange={(e) => updatePartField(i, 'quantity', e.target.value)}
-                          className="w-full sm:w-16 rounded-md border border-gray-300 px-2 py-2.5 sm:py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
-                        />
-                      </div>
-                      <div className="flex-1 sm:flex-none">
-                        <label className="block text-xs text-gray-500 mb-0.5 sm:hidden">Price</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Price"
-                          value={part.unitPrice}
-                          onChange={(e) => updatePartField(i, 'unitPrice', e.target.value)}
-                          readOnly={part.isFromDb}
-                          className={`w-full sm:w-24 rounded-md border px-2 py-2.5 sm:py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 ${
-                            part.isFromDb
-                              ? 'border-green-300 bg-green-50 cursor-not-allowed'
-                              : 'border-gray-300'
-                          }`}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removePart(i)}
-                        className="text-gray-400 hover:text-red-500 text-sm p-2 sm:p-0 sm:mt-1 min-h-[44px] sm:min-h-0 flex items-center"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <p className="text-xs text-gray-500">
-                  Parts total: ${partsTotal.toFixed(2)}
-                </p>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Hours Worked
+              </label>
+              <input
+                type="number"
+                step="0.25"
+                min="0"
+                required
+                value={hoursWorked}
+                onChange={(e) => setHoursWorked(e.target.value)}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Flat rate base — informational, shown above additional work */}
+            {isFlatRate && (
+              <div className="flex items-center justify-between py-2 px-3 bg-blue-50 rounded-md border border-blue-100">
+                <span className="text-sm font-medium text-blue-800">PM Service (Flat Rate)</span>
+                <span className="text-sm font-semibold text-blue-800">${flatRate!.toFixed(2)}</span>
               </div>
             )}
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Completion Notes
-            </label>
-            <textarea
-              value={completionNotes}
-              onChange={(e) => setCompletionNotes(e.target.value)}
-              rows={3}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
-              placeholder="Notes about the work performed..."
-            />
-          </div>
+            {/* Parts */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  {isTech
+                    ? 'Parts Used (for inventory tracking — no charge)'
+                    : isFlatRate
+                      ? 'Additional Work (beyond PM agreement)'
+                      : 'Parts Used'}
+                </label>
+                <button
+                  type="button"
+                  onClick={addPart}
+                  className="text-xs font-medium text-slate-700 hover:text-slate-900 py-2 sm:py-0 min-h-[44px] sm:min-h-0 flex items-center"
+                >
+                  + Add Part
+                </button>
+              </div>
+              {parts.length > 0 && (
+                <div className="space-y-2">
+                  {parts.map((part, i) => (
+                    <div key={`new-part-${i}`} className="rounded-md border border-gray-200 p-3 space-y-2 sm:border-0 sm:p-0 sm:space-y-0 sm:flex sm:items-start sm:gap-2">
+                      {/* Description with product search */}
+                      <div
+                        className="relative sm:flex-1"
+                        ref={(el) => { comboRefs.current.set(i, el) }}
+                      >
+                        {part.isFromDb ? (
+                          <div className="flex items-center gap-1 rounded-md border border-green-300 bg-green-50 px-3 py-2.5 sm:py-1.5 text-sm text-gray-900">
+                            <span className="flex-1 truncate">{part.description}</span>
+                            <button
+                              type="button"
+                              onClick={() => clearProduct(i)}
+                              className="text-gray-400 hover:text-red-500 shrink-0 p-1"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            placeholder="Search products or type description..."
+                            value={part.description}
+                            onChange={(e) => handlePartDescriptionChange(i, e.target.value)}
+                            className="w-full rounded-md border border-gray-300 px-3 py-2.5 sm:py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                          />
+                        )}
+                        {part.searchOpen && part.searchResults.length > 0 && (
+                          <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                            {part.searchResults.map((product) => (
+                              <button
+                                key={product.id}
+                                type="button"
+                                onClick={() => selectProduct(i, product)}
+                                className="w-full text-left px-3 py-3 sm:py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                              >
+                                <span className="font-medium text-gray-900">{product.number}</span>
+                                <span className="text-gray-500"> — {product.description ?? ''}</span>
+                                {product.unit_price != null && (
+                                  <span className="text-green-700 sm:float-right font-medium block sm:inline mt-0.5 sm:mt-0">
+                                    ${product.unit_price.toFixed(2)}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {part.searchOpen && !part.searching && part.searchResults.length === 0 && part.description.trim() && (
+                          <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2.5 text-sm text-gray-500">
+                            No products found — enter details manually
+                          </div>
+                        )}
+                        {part.searching && (
+                          <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2.5 text-sm text-gray-500">
+                            Searching...
+                          </div>
+                        )}
+                      </div>
+                      {/* Qty + Price + Remove row */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 sm:flex-none">
+                          <label className="block text-xs text-gray-500 mb-0.5 sm:hidden">Qty</label>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="Qty"
+                            value={part.quantity}
+                            onChange={(e) => updatePartField(i, 'quantity', e.target.value)}
+                            className="w-full sm:w-16 rounded-md border border-gray-300 px-2 py-2.5 sm:py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                          />
+                        </div>
+                        <div className="flex-1 sm:flex-none">
+                          <label className="block text-xs text-gray-500 mb-0.5 sm:hidden">Price</label>
+                          {isTech ? (
+                            <input
+                              type="number"
+                              value={0}
+                              readOnly
+                              className="w-full sm:w-24 rounded-md border border-gray-200 bg-gray-50 px-2 py-2.5 sm:py-1.5 text-sm text-gray-400 cursor-not-allowed"
+                            />
+                          ) : (
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="Price"
+                              value={part.unitPrice}
+                              onChange={(e) => updatePartField(i, 'unitPrice', e.target.value)}
+                              readOnly={part.isFromDb}
+                              className={`w-full sm:w-24 rounded-md border px-2 py-2.5 sm:py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 ${
+                                part.isFromDb
+                                  ? 'border-green-300 bg-green-50 cursor-not-allowed'
+                                  : 'border-gray-300'
+                              }`}
+                            />
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removePart(i)}
+                          className="text-gray-400 hover:text-red-500 text-sm p-2 sm:p-0 sm:mt-1 min-h-[44px] sm:min-h-0 flex items-center"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-xs text-gray-500">
+                    Parts total: ${partsTotal.toFixed(2)}
+                  </p>
+                </div>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Billing Amount ($)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              required
-              value={billingAmount}
-              onChange={(e) => setBillingAmount(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
-              placeholder="0.00"
-            />
-            {(parts.length > 0 || (isFlatRate && parseFloat(hoursWorked) > 0)) && (
-              <p className="text-xs text-gray-500 mt-1">
-                {isFlatRate
-                  ? `Suggested: $${(flatRate! + partsTotal + (parseFloat(hoursWorked) || 0) * laborRate).toFixed(2)} (flat rate + additional parts + $${laborRate}/hr labor)`
-                  : `Suggested (T&M): $${(partsTotal + (parseFloat(hoursWorked) || 0) * laborRate).toFixed(2)} (parts + $${laborRate}/hr labor)`
-                }
-              </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Completion Notes
+              </label>
+              <textarea
+                value={completionNotes}
+                onChange={(e) => setCompletionNotes(e.target.value)}
+                rows={3}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                placeholder="Notes about the work performed..."
+              />
+            </div>
+
+            {!isTech && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Billing Amount ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={billingAmount}
+                  onChange={(e) => setBillingAmount(e.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  placeholder="0.00"
+                />
+                {(parts.length > 0 || (isFlatRate && parseFloat(hoursWorked) > 0)) && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {isFlatRate
+                      ? `Suggested: $${(flatRate! + partsTotal + (parseFloat(hoursWorked) || 0) * laborRate).toFixed(2)} (flat rate + additional parts + $${laborRate}/hr labor)`
+                      : `Suggested (T&M): $${(partsTotal + (parseFloat(hoursWorked) || 0) * laborRate).toFixed(2)} (parts + $${laborRate}/hr labor)`
+                    }
+                  </p>
+                )}
+              </div>
             )}
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors min-h-[44px]"
-          >
-            {loading ? 'Completing...' : 'Mark Complete'}
-          </button>
-        </form>
-      </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors min-h-[44px]"
+            >
+              {loading ? 'Completing...' : 'Mark Complete'}
+            </button>
+          </form>
+        </div>
+        <ServiceRequestSection />
+      </>
     )
   }
 

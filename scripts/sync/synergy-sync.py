@@ -260,7 +260,8 @@ def sync_customers(conn) -> int:
             cust.Addr2,
             cust.City,
             cust.State,
-            cust.Zip4
+            cust.Zip4,
+            cust.PORequired
         FROM cust
         LEFT JOIN artermcode ON artermcode.xDL4RecNum = cust.Terms
         WHERE cust.CustomerCode > 0
@@ -317,6 +318,7 @@ def sync_customers(conn) -> int:
             "ar_terms": safe_str(row.TermsDescription),
             "credit_hold": (row.SStop is not None and int(row.SStop) > 1),
             "billing_address": billing_address,
+            "po_required": bool(row.PORequired) if row.PORequired is not None else False,
             "synced_at": utcnow_iso(),
         })
 
@@ -468,6 +470,73 @@ def sync_contacts(conn, known_tables: set[str]) -> int:
     return count
 
 
+# ============================================================
+# Sync: Ship-To Locations
+# ============================================================
+
+def sync_ship_to_locations(conn) -> int:
+    log.info("--- Syncing ship-to locations ---")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            shiplist.CustomerCode,
+            shiplist.ShiplistCode,
+            shiplist.Name,
+            shiplist.Address,
+            shiplist.City,
+            shiplist.State,
+            shiplist.ZipCode,
+            shiplist.Contact,
+            shiplist.Email
+        FROM shiplist
+        WHERE shiplist.CustomerCode > 0
+        ORDER BY shiplist.CustomerCode, shiplist.ShiplistCode
+    """)
+
+    rows = cursor.fetchall()
+    log.info(f"  Fetched {len(rows)} ship-to location rows from Synergy.")
+
+    cust_map = fetch_customer_synergy_id_map()
+
+    locations = []
+    skipped = 0
+    for row in rows:
+        customer_id = cust_map.get(str(row.CustomerCode).strip()) if row.CustomerCode is not None else None
+        if customer_id is None:
+            skipped += 1
+            continue
+
+        address = build_address(
+            row.Address, None, row.City, row.State, row.ZipCode
+        )
+
+        locations.append({
+            "customer_id": customer_id,
+            "synergy_customer_code": str(row.CustomerCode).strip(),
+            "synergy_shiplist_code": str(row.ShiplistCode).strip(),
+            "name": safe_str(row.Name),
+            "address": address,
+            "city": safe_str(row.City),
+            "state": safe_str(row.State),
+            "zip": safe_str(row.ZipCode),
+            "contact": safe_str(row.Contact),
+            "email": safe_str(row.Email),
+            "synced_at": utcnow_iso(),
+        })
+
+    if skipped:
+        log.debug(f"  Skipped {skipped} ship-to locations with no matching customer in Supabase.")
+
+    count = upsert_in_batches(
+        locations,
+        "ship_to_locations",
+        on_conflict="synergy_customer_code,synergy_shiplist_code"
+    )
+    log.info(f"  Ship-to locations synced: {count}")
+    return count
+
+
 def fetch_customer_synergy_id_map() -> dict[str, int]:
     """Fetch all customers from Supabase and return a dict of synergy_id -> id."""
     url = f"{SUPABASE_URL}/rest/v1/customers?select=id,synergy_id&limit=50000"
@@ -586,6 +655,14 @@ def main() -> None:
         except Exception as e:
             log.error(f"Technician sync failed: {e}", exc_info=True)
             failures.append(f"technicians: {e}")
+
+        # --- Ship-To Locations (depends on customers) ---
+        try:
+            count = sync_ship_to_locations(erp_conn)
+            total_synced += count
+        except Exception as e:
+            log.error(f"Ship-to locations sync failed: {e}", exc_info=True)
+            failures.append(f"ship_to_locations: {e}")
 
         # --- Contacts (depends on customers being in Supabase) ---
         try:

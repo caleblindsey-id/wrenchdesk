@@ -1,0 +1,20 @@
+import { getProspects } from '@/lib/db/customers'
+import { requireRole } from '@/lib/auth'
+import ProspectList from './ProspectList'
+
+export default async function ProspectsPage() {
+  await requireRole('manager', 'coordinator')
+  const prospects = await getProspects()
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Prospects</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Inactive customers — potential re-engagement opportunities
+        </p>
+      </div>
+      <ProspectList prospects={prospects} />
+    </div>
+  )
+}

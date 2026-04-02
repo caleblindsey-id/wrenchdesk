@@ -21,6 +21,7 @@ const STATUS_OPTIONS: { value: '' | TicketStatus; label: string }[] = [
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
   { value: 'billed', label: 'Billed' },
+  { value: 'skipped', label: 'Skipped' },
 ]
 
 interface TicketBoardProps {
@@ -98,6 +99,30 @@ export default function TicketBoard({
       }
       setSelected(new Set())
       setAssignTo('')
+      router.refresh()
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  async function handleSkipSelected() {
+    if (selected.size === 0) return
+    setBulkLoading(true)
+    setError(null)
+    try {
+      const promises = Array.from(selected).map((ticketId) =>
+        fetch(`/api/tickets/${ticketId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'skipped' }),
+        })
+      )
+      const results = await Promise.all(promises)
+      const failed = results.filter((r) => !r.ok)
+      if (failed.length > 0) {
+        setError(`${failed.length} ticket(s) could not be skipped (may already be in progress)`)
+      }
+      setSelected(new Set())
       router.refresh()
     } finally {
       setBulkLoading(false)
@@ -236,6 +261,13 @@ export default function TicketBoard({
           >
             {bulkLoading ? 'Assigning...' : 'Assign'}
           </button>
+          <button
+            onClick={handleSkipSelected}
+            disabled={bulkLoading}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            {bulkLoading ? 'Processing...' : 'Skip Selected'}
+          </button>
         </div>
       )}
 
@@ -260,6 +292,9 @@ export default function TicketBoard({
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-sm font-medium text-gray-900 truncate">
                         {ticket.customers?.name ?? '—'}
+                        {ticket.ticket_type === 'service_request' && (
+                          <span className="text-xs text-orange-600 ml-1">(SR)</span>
+                        )}
                       </span>
                       <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
                     </div>
@@ -275,6 +310,9 @@ export default function TicketBoard({
                       ? new Date(ticket.scheduled_date).toLocaleDateString()
                       : '—'}{' '}
                     · Tech: {ticket.users?.name ?? '—'}
+                    {ticket.equipment?.ship_to_locations?.city && (
+                      <> · City: {ticket.equipment.ship_to_locations.city}</>
+                    )}
                   </p>
                 </div>
               ))}
@@ -298,6 +336,7 @@ export default function TicketBoard({
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Customer</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Equipment</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">City</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Scheduled Date</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600">Technician</th>
                   </tr>
@@ -327,11 +366,17 @@ export default function TicketBoard({
                       </td>
                       <td className="px-4 py-3 text-gray-900">
                         {ticket.customers?.name ?? '—'}
+                        {ticket.ticket_type === 'service_request' && (
+                          <span className="text-xs text-orange-600 ml-1">(SR)</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {[ticket.equipment?.make, ticket.equipment?.model]
                           .filter(Boolean)
                           .join(' ') || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {ticket.equipment?.ship_to_locations?.city ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {ticket.scheduled_date

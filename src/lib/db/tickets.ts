@@ -3,13 +3,13 @@ import { PmTicketRow, PmTicketUpdate, TicketStatus, PartUsed, BillingType } from
 
 export type TicketWithJoins = PmTicketRow & {
   customers: { name: string } | null
-  equipment: { make: string | null; model: string | null } | null
+  equipment: { make: string | null; model: string | null; ship_to_locations: { city: string | null } | null } | null
   users: { name: string } | null
 }
 
 export type TicketDetail = PmTicketRow & {
   customers: { name: string; account_number: string | null } | null
-  equipment: { make: string | null; model: string | null; serial_number: string | null } | null
+  equipment: { make: string | null; model: string | null; serial_number: string | null; ship_to_locations: { city: string | null } | null } | null
   assigned_technician: { name: string } | null
   created_by: { name: string } | null
   schedule: { billing_type: BillingType | null; flat_rate: number | null } | null
@@ -29,7 +29,7 @@ export async function getTickets(filters?: {
     .select(`
       *,
       customers(name),
-      equipment(make, model),
+      equipment(make, model, ship_to_locations(city)),
       users!assigned_technician_id(name)
     `)
     .order('created_at', { ascending: false })
@@ -68,7 +68,7 @@ export async function getTicket(id: string): Promise<TicketDetail | null> {
     .select(`
       *,
       customers(name, account_number),
-      equipment(make, model, serial_number),
+      equipment(make, model, serial_number, ship_to_locations(city)),
       assigned_technician:users!assigned_technician_id(name),
       created_by:users!created_by_id(name),
       schedule:pm_schedules(billing_type, flat_rate)
@@ -158,7 +158,7 @@ export async function bulkAssignTechnician(
       status: 'assigned',
     })
     .in('id', ticketIds)
-    .in('status', ['unassigned'])
+    .in('status', ['unassigned', 'assigned'])
     .select()
 
   if (error) throw error

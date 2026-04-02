@@ -1,6 +1,7 @@
 import { getEquipmentDetail } from '@/lib/db/equipment'
 import { getUsers } from '@/lib/db/users'
 import { requireRole } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -19,6 +20,15 @@ export default async function EquipmentDetailPage({
     getEquipmentDetail(id),
     getUsers(true),
   ])
+
+  const supabase = await createClient()
+  const { data: shipToLocations } = equipment?.customer_id
+    ? await supabase
+        .from('ship_to_locations')
+        .select('id, name, city')
+        .eq('customer_id', equipment.customer_id)
+        .order('name')
+    : { data: [] }
 
   if (!equipment) notFound()
 
@@ -43,7 +53,7 @@ export default async function EquipmentDetailPage({
         </div>
       </div>
 
-      <EquipmentForm equipment={equipment} users={users} />
+      <EquipmentForm equipment={equipment} users={users} shipToLocations={shipToLocations ?? []} />
 
       <ScheduleSection
         equipmentId={equipment.id}

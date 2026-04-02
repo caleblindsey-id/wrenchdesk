@@ -4,6 +4,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { BillingDocument } from '@/lib/pdf/billing-template'
 import { createClient } from '@/lib/supabase/server'
 import { getUser } from '@/lib/db/users'
+import { updateAnchorMonth } from '@/lib/db/schedules'
 
 // ============================================================
 // Types
@@ -33,11 +34,13 @@ interface BillingTicket {
   billingAmount: number | null
   billingType: string | null
   flatRate: number | null
+  poRequired: boolean
 }
 
 // Raw Supabase join shape
 interface RawTicket {
   id: string
+  pm_schedule_id: string | null
   completed_date: string | null
   hours_worked: number | null
   completion_notes: string | null
@@ -53,6 +56,7 @@ interface RawTicket {
     account_number: string | null
     ar_terms: string | null
     billing_address: string | null
+    po_required: boolean
   } | null
   equipment: {
     make: string | null
@@ -129,12 +133,13 @@ export async function POST(request: NextRequest) {
       .from('pm_tickets')
       .select(`
         id,
+        pm_schedule_id,
         completed_date,
         hours_worked,
         completion_notes,
         parts_used,
         billing_amount,
-        customers(name, account_number, ar_terms, billing_address),
+        customers(name, account_number, ar_terms, billing_address, po_required),
         equipment(make, model, serial_number, location_on_site),
         technician:users!assigned_technician_id(name),
         pm_schedules(billing_type, flat_rate)
@@ -217,6 +222,7 @@ export async function POST(request: NextRequest) {
         billingAmount: raw.billing_amount,
         billingType: raw.pm_schedules?.billing_type ?? null,
         flatRate: raw.pm_schedules?.flat_rate ?? null,
+        poRequired: raw.customers?.po_required ?? false,
       }
     })
 
@@ -234,6 +240,21 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to mark tickets as exported. No PDF was generated.' },
         { status: 500 }
       )
+    }
+
+    // --- Recalculate anchor_month for each schedule ---
+    // When a PM is completed late (e.g., generated for April, completed in May),
+    // the next service should be based on the completion month, not the original.
+    for (const raw of rawTickets as RawTicket[]) {
+      if (!raw.completed_date || !raw.pm_schedule_id) continue
+      // Parse with midday anchor to avoid UTC midnight timezone edge cases
+      const completedMonth = new Date(raw.completed_date + 'T12:00:00Z').getUTCMonth() + 1
+      try {
+        await updateAnchorMonth(raw.pm_schedule_id, completedMonth)
+      } catch (err) {
+        // Log but don't fail the billing — anchor update is non-critical
+        console.error(`[billing/pdf] Failed to update anchor for schedule ${raw.pm_schedule_id}:`, err)
+      }
     }
 
     // --- Render PDF ---

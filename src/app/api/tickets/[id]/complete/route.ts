@@ -58,12 +58,35 @@ export async function POST(
       )
     }
 
+    // When a tech completes, auto-set billing amount from flat rate and zero out part prices
+    let finalBillingAmount = billingAmount
+    let finalParts = partsUsed ?? []
+
+    if (isTechnician(user.role)) {
+      // Zero out part prices — techs add parts for inventory tracking only
+      finalParts = finalParts.map(p => ({ ...p, unit_price: 0 }))
+
+      // Set billing amount to flat rate from schedule
+      const { data: ticketWithSchedule } = await supabase
+        .from('pm_tickets')
+        .select('pm_schedules(flat_rate, billing_type)')
+        .eq('id', id)
+        .single()
+
+      const schedule = ticketWithSchedule?.pm_schedules as { flat_rate: number | null; billing_type: string | null } | null
+      if (schedule?.billing_type === 'flat_rate' && schedule.flat_rate != null) {
+        finalBillingAmount = schedule.flat_rate
+      } else {
+        finalBillingAmount = 0
+      }
+    }
+
     const updated = await completeTicket(id, {
       completedDate,
       hoursWorked,
-      partsUsed: partsUsed ?? [],
+      partsUsed: finalParts,
       completionNotes: completionNotes ?? '',
-      billingAmount,
+      billingAmount: finalBillingAmount,
     })
 
     return NextResponse.json(updated)

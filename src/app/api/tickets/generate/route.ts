@@ -52,12 +52,16 @@ export async function POST(request: NextRequest) {
     // Fetch all existing tickets for this month/year in one query to avoid N+1
     const { data: existingTickets, error: existingError } = await supabase
       .from('pm_tickets')
-      .select('pm_schedule_id')
+      .select('pm_schedule_id, equipment_id')
       .eq('month', month)
       .eq('year', year)
+      .not('status', 'eq', 'billed')
     if (existingError) throw existingError
     const existingScheduleIds = new Set(
       (existingTickets ?? []).map(t => t.pm_schedule_id).filter(Boolean)
+    )
+    const existingEquipmentIds = new Set(
+      (existingTickets ?? []).map(t => t.equipment_id).filter(Boolean)
     )
 
     const ticketsToCreate: PmTicketInsert[] = []
@@ -77,6 +81,12 @@ export async function POST(request: NextRequest) {
 
       // Skip if a ticket already exists for this schedule+month+year
       if (existingScheduleIds.has(schedule.id)) {
+        skipped++
+        continue
+      }
+
+      // Skip if a ticket already exists for this equipment+month+year (e.g., manually created)
+      if (existingEquipmentIds.has(schedule.equipment_id)) {
         skipped++
         continue
       }

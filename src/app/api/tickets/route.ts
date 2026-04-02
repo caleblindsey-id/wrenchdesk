@@ -39,6 +39,25 @@ export async function POST(request: NextRequest) {
 
     const status: TicketStatus = assigned_technician_id ? 'assigned' : 'unassigned'
 
+    // Check for duplicate ticket (same equipment + month + year, not yet billed)
+    if (equipment_id) {
+      const { data: existing } = await supabase
+        .from('pm_tickets')
+        .select('id')
+        .eq('equipment_id', equipment_id)
+        .eq('month', month)
+        .eq('year', year)
+        .not('status', 'eq', 'billed')
+        .limit(1)
+
+      if (existing && existing.length > 0) {
+        return NextResponse.json(
+          { error: 'A ticket already exists for this equipment in the selected month' },
+          { status: 409 }
+        )
+      }
+    }
+
     const { data: ticket, error: insertError } = await supabase
       .from('pm_tickets')
       .insert({

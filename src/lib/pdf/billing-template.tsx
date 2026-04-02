@@ -28,6 +28,7 @@ interface BillingTicket {
   billingAmount: number | null
   billingType: string | null
   flatRate: number | null
+  poRequired: boolean
 }
 
 interface BillingDocumentProps {
@@ -255,6 +256,13 @@ function TicketSection({ ticket }: { ticket: BillingTicket }) {
         <Text style={styles.fieldLabel}>Billing Address:</Text>
         <Text style={styles.fieldValue}>{dash(ticket.billingAddress)}</Text>
       </View>
+      {ticket.poRequired && (
+        <View style={[styles.fieldRow, { marginTop: 4 }]}>
+          <Text style={[styles.fieldLabel, { fontFamily: 'Helvetica-Bold', color: '#cc0000' }]}>
+            PO REQUIRED
+          </Text>
+        </View>
+      )}
 
       {/* EQUIPMENT */}
       <Text style={styles.sectionLabel}>Equipment</Text>

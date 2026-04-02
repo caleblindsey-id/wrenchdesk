@@ -22,11 +22,12 @@ type AllowedUpdate = Pick<PmTicketRow, typeof ALLOWED_FIELDS[number]>
 
 // Valid forward-only state transitions
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  unassigned: ['assigned', 'in_progress'],
-  assigned:   ['in_progress', 'unassigned'],
+  unassigned: ['assigned', 'in_progress', 'skipped'],
+  assigned:   ['in_progress', 'unassigned', 'skipped'],
   in_progress: ['completed'],
   completed:  ['billed'],
   billed:     [],
+  skipped:    [],
 }
 
 export async function PATCH(
