@@ -261,7 +261,7 @@ def sync_customers(conn) -> int:
             cust.City,
             cust.State,
             cust.Zip4,
-            cust.PORequired
+            cust.PORequiredFlag
         FROM cust
         LEFT JOIN artermcode ON artermcode.xDL4RecNum = cust.Terms
         WHERE cust.CustomerCode > 0
@@ -318,7 +318,7 @@ def sync_customers(conn) -> int:
             "ar_terms": safe_str(row.TermsDescription),
             "credit_hold": (row.SStop is not None and int(row.SStop) > 1),
             "billing_address": billing_address,
-            "po_required": bool(row.PORequired) if row.PORequired is not None else False,
+            "po_required": bool(row.PORequiredFlag) if row.PORequiredFlag is not None else False,
             "synced_at": utcnow_iso(),
         })
 
