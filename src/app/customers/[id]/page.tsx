@@ -127,6 +127,45 @@ export default async function CustomerDetailPage({
         )}
       </div>
 
+      {/* Ship-To Locations */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="px-5 py-4 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+            Ship-To Locations
+          </h2>
+        </div>
+        {customer.ship_to_locations.length === 0 ? (
+          <div className="p-8 text-center text-sm text-gray-500">
+            No ship-to locations on file.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="px-5 py-3 text-left font-medium text-gray-600">Name</th>
+                  <th className="px-5 py-3 text-left font-medium text-gray-600">Address</th>
+                  <th className="px-5 py-3 text-left font-medium text-gray-600">Contact</th>
+                  <th className="px-5 py-3 text-left font-medium text-gray-600">Email</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {customer.ship_to_locations.map((loc) => (
+                  <tr key={loc.id}>
+                    <td className="px-5 py-3 text-gray-900">{loc.name ?? '—'}</td>
+                    <td className="px-5 py-3 text-gray-600">
+                      {[loc.address, loc.city, loc.state, loc.zip].filter(Boolean).join(', ') || '—'}
+                    </td>
+                    <td className="px-5 py-3 text-gray-600">{loc.contact ?? '—'}</td>
+                    <td className="px-5 py-3 text-gray-600">{loc.email ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Equipment */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-5 py-4 border-b border-gray-200">

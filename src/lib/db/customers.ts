@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { CustomerRow, ContactRow } from '@/types/database'
+import { CustomerRow, ContactRow, ShipToLocationRow } from '@/types/database'
 
 export interface ProspectRow {
   id: number
@@ -120,12 +120,12 @@ export async function getProspects(): Promise<ProspectRow[]> {
 
 export async function getCustomer(
   id: number
-): Promise<(CustomerRow & { contacts: ContactRow[] }) | null> {
+): Promise<(CustomerRow & { contacts: ContactRow[]; ship_to_locations: ShipToLocationRow[] }) | null> {
   const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('customers')
-    .select('*, contacts(*)')
+    .select('*, contacts(*), ship_to_locations(*)')
     .eq('id', id)
     .single()
 
@@ -134,5 +134,5 @@ export async function getCustomer(
     throw error
   }
 
-  return data as unknown as CustomerRow & { contacts: ContactRow[] }
+  return data as unknown as CustomerRow & { contacts: ContactRow[]; ship_to_locations: ShipToLocationRow[] }
 }
