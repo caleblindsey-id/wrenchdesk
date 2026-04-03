@@ -538,17 +538,33 @@ def sync_ship_to_locations(conn) -> int:
 
 
 def fetch_customer_synergy_id_map() -> dict[str, int]:
-    """Fetch all customers from Supabase and return a dict of synergy_id -> id."""
-    url = f"{SUPABASE_URL}/rest/v1/customers?select=id,synergy_id&limit=50000"
+    """Fetch all customers from Supabase and return a dict of synergy_id -> id.
+
+    Paginates in batches of 1000 to avoid Supabase's default row limit.
+    """
     headers = {
         "apikey": SUPABASE_SERVICE_ROLE_KEY,
         "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
     }
+    result: dict[str, int] = {}
+    offset = 0
+    page_size = 1000
     try:
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        return {row["synergy_id"]: row["id"] for row in data if row.get("synergy_id")}
+        while True:
+            url = f"{SUPABASE_URL}/rest/v1/customers?select=id,synergy_id&order=id&limit={page_size}&offset={offset}"
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            if not data:
+                break
+            for row in data:
+                if row.get("synergy_id"):
+                    result[row["synergy_id"]] = row["id"]
+            if len(data) < page_size:
+                break
+            offset += page_size
+        log.info(f"  Customer map loaded: {len(result)} entries (paginated).")
+        return result
     except Exception as e:
         log.warning(f"Could not fetch customer map from Supabase: {e}")
         return {}
