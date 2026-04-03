@@ -289,58 +289,56 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     0
   )
 
-  function ServiceRequestSection() {
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
-          Additional Service
-        </h2>
-        {serviceRequestSuccess && (
-          <p className="text-sm text-green-600 mb-3">Service request created successfully.</p>
-        )}
-        {!serviceRequestOpen ? (
-          <button
-            onClick={() => setServiceRequestOpen(true)}
-            className="px-4 py-3 sm:py-2 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors min-h-[44px]"
-          >
-            Request Additional Service
-          </button>
-        ) : (
-          <form onSubmit={handleServiceRequest} className="space-y-3 max-w-xl">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description of Additional Work Needed
-              </label>
-              <textarea
-                value={serviceRequestDesc}
-                onChange={(e) => setServiceRequestDesc(e.target.value)}
-                rows={3}
-                required
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
-                placeholder="Describe the additional work diagnosed on-site..."
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={serviceRequestLoading}
-                className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors min-h-[44px]"
-              >
-                {serviceRequestLoading ? 'Creating...' : 'Submit Request'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setServiceRequestOpen(false); setServiceRequestDesc('') }}
-                className="px-4 py-3 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors min-h-[44px]"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    )
-  }
+  const serviceRequestSection = (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+      <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
+        Additional Service
+      </h2>
+      {serviceRequestSuccess && (
+        <p className="text-sm text-green-600 mb-3">Service request created successfully.</p>
+      )}
+      {!serviceRequestOpen ? (
+        <button
+          onClick={() => setServiceRequestOpen(true)}
+          className="px-4 py-3 sm:py-2 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors min-h-[44px]"
+        >
+          Request Additional Service
+        </button>
+      ) : (
+        <form onSubmit={handleServiceRequest} className="space-y-3 max-w-xl">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description of Additional Work Needed
+            </label>
+            <textarea
+              value={serviceRequestDesc}
+              onChange={(e) => setServiceRequestDesc(e.target.value)}
+              rows={3}
+              required
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+              placeholder="Describe the additional work diagnosed on-site..."
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={serviceRequestLoading}
+              className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors min-h-[44px]"
+            >
+              {serviceRequestLoading ? 'Creating...' : 'Submit Request'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setServiceRequestOpen(false); setServiceRequestDesc('') }}
+              className="px-4 py-3 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors min-h-[44px]"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
 
   // Unassigned or assigned: show Start button
   if (ticket.status === 'unassigned' || ticket.status === 'assigned') {
@@ -359,7 +357,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             {loading ? 'Starting...' : 'Start Work'}
           </button>
         </div>
-        <ServiceRequestSection />
+        {serviceRequestSection}
       </>
     )
   }
@@ -593,7 +591,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             </button>
           </form>
         </div>
-        <ServiceRequestSection />
+        {serviceRequestSection}
       </>
     )
   }
