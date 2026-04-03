@@ -230,13 +230,13 @@ export default function TicketBoard({
             <div className="w-full lg:w-auto lg:ml-auto flex gap-2">
               <button
                 onClick={() => setCreateOpen(true)}
-                className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors"
+                className="w-full lg:w-auto px-4 py-2.5 lg:py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors min-h-[44px] lg:min-h-0"
               >
                 New Ticket
               </button>
               <button
                 onClick={() => setGenerateOpen(true)}
-                className="w-full lg:w-auto px-4 py-1.5 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+                className="w-full lg:w-auto px-4 py-2.5 lg:py-1.5 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors min-h-[44px] lg:min-h-0"
               >
                 Generate {MONTHS[month - 1]} PMs
               </button>
@@ -254,34 +254,36 @@ export default function TicketBoard({
 
       {/* Bulk assign — managers only */}
       {isManager && selected.size > 0 && (
-        <div className="bg-blue-50 rounded-lg border border-blue-200 p-3 flex items-center gap-3">
+        <div className="bg-blue-50 rounded-lg border border-blue-200 p-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <span className="text-sm text-blue-800 font-medium">
             {selected.size} ticket{selected.size > 1 ? 's' : ''} selected
           </span>
           <select
             value={assignTo}
             onChange={(e) => setAssignTo(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            className="w-full sm:w-auto rounded-md border border-gray-300 px-3 py-2.5 sm:py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 min-h-[44px] sm:min-h-0"
           >
             <option value="">Assign to...</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
-          <button
-            onClick={handleBulkAssign}
-            disabled={!assignTo || bulkLoading}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {bulkLoading ? 'Assigning...' : 'Assign'}
-          </button>
-          <button
-            onClick={handleSkipSelected}
-            disabled={bulkLoading}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            {bulkLoading ? 'Processing...' : 'Skip Selected'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkAssign}
+              disabled={!assignTo || bulkLoading}
+              className="flex-1 sm:flex-none px-3 py-2.5 sm:py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors min-h-[44px] sm:min-h-0"
+            >
+              {bulkLoading ? 'Assigning...' : 'Assign'}
+            </button>
+            <button
+              onClick={handleSkipSelected}
+              disabled={bulkLoading}
+              className="flex-1 sm:flex-none px-3 py-2.5 sm:py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 transition-colors min-h-[44px] sm:min-h-0"
+            >
+              {bulkLoading ? 'Processing...' : 'Skip Selected'}
+            </button>
+          </div>
         </div>
       )}
 

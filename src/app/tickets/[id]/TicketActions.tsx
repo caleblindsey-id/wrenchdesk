@@ -591,7 +591,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                 required
                 value={completedDate}
                 onChange={(e) => setCompletedDate(e.target.value)}
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
               />
             </div>
 
@@ -606,7 +606,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                 required
                 value={hoursWorked}
                 onChange={(e) => setHoursWorked(e.target.value)}
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                 placeholder="0.00"
               />
             </div>
@@ -775,7 +775,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                 type="text"
                 value={poNumber}
                 onChange={(e) => setPoNumber(e.target.value)}
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                 placeholder="Enter PO number if required..."
               />
             </div>
@@ -790,21 +790,21 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                   type="text"
                   value={billingContactName}
                   onChange={(e) => setBillingContactName(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                   placeholder="Name"
                 />
                 <input
                   type="email"
                   value={billingContactEmail}
                   onChange={(e) => setBillingContactEmail(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                   placeholder="Email"
                 />
                 <input
                   type="tel"
                   value={billingContactPhone}
                   onChange={(e) => setBillingContactPhone(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                   placeholder="Phone"
                 />
               </div>
@@ -822,7 +822,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                   required
                   value={billingAmount}
                   onChange={(e) => setBillingAmount(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                   placeholder="0.00"
                 />
                 {(parts.length > 0 || (isFlatRate && parseFloat(hoursWorked) > 0)) && (

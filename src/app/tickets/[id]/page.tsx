@@ -38,7 +38,7 @@ export default async function TicketDetailPage({
         <div className="flex items-center gap-3">
           <Link
             href="/tickets"
-            className="text-gray-400 hover:text-gray-600 transition-colors p-2 -m-2 rounded-md"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-3 -m-3 rounded-md"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>

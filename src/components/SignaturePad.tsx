@@ -80,7 +80,7 @@ export default function SignaturePad({ onSignatureChange, initialName = '' }: Si
             <button
               type="button"
               onClick={handleClear}
-              className="text-xs text-gray-500 hover:text-red-500 py-1 px-2"
+              className="text-xs text-gray-500 hover:text-red-500 py-2 px-3 min-h-[44px] sm:min-h-0 sm:py-1 sm:px-2 flex items-center"
             >
               Clear
             </button>
@@ -104,7 +104,7 @@ export default function SignaturePad({ onSignatureChange, initialName = '' }: Si
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2.5 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+          className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
           placeholder="Customer's full name"
         />
       </div>

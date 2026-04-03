@@ -126,7 +126,10 @@ export default async function DashboardPage() {
                   className="block px-4 py-3 active:bg-gray-50"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <StatusBadge status={ticket.status} />
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-slate-500">WO-{ticket.work_order_number}</span>
+                      <StatusBadge status={ticket.status} />
+                    </div>
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-sm font-medium text-gray-900 truncate">
                         {ticket.customers?.name ?? '—'}
