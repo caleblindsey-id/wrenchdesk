@@ -177,3 +177,70 @@ export async function PATCH(
     )
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    const user = await getCurrentUser()
+    if (!user?.role) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (user.role !== 'manager') {
+      return NextResponse.json({ error: 'Only managers can delete tickets' }, { status: 403 })
+    }
+
+    const supabase = await createClient()
+
+    // Fetch ticket to get photos for cleanup
+    const { data: ticket, error: fetchError } = await supabase
+      .from('pm_tickets')
+      .select('id, photos')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !ticket) {
+      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
+    }
+
+    // Block deletion if ticket has child service requests
+    const { count } = await supabase
+      .from('pm_tickets')
+      .select('id', { count: 'exact', head: true })
+      .eq('parent_ticket_id', id)
+
+    if (count && count > 0) {
+      return NextResponse.json(
+        { error: 'Delete linked service requests first' },
+        { status: 409 }
+      )
+    }
+
+    // Clean up photos from Supabase Storage
+    const photos = (ticket.photos ?? []) as { storage_path: string }[]
+    if (photos.length > 0) {
+      await supabase.storage
+        .from('ticket-photos')
+        .remove(photos.map((p) => p.storage_path))
+    }
+
+    // Delete the ticket
+    const { error: deleteError } = await supabase
+      .from('pm_tickets')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) throw deleteError
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error(`tickets/[id] DELETE error:`, err)
+    return NextResponse.json(
+      { error: 'Failed to delete ticket' },
+      { status: 500 }
+    )
+  }
+}

@@ -455,6 +455,37 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     0
   )
 
+  async function handleDelete() {
+    if (!confirm('Permanently delete this ticket? This cannot be undone.')) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete ticket')
+      }
+      router.push('/tickets')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const deleteButton = userRole === 'manager' ? (
+    <div className="mt-6 pt-4 border-t border-gray-200">
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={loading}
+        className="px-4 py-2 text-xs font-medium text-red-700 bg-white border border-red-300 rounded-md hover:bg-red-50 disabled:opacity-50 transition-colors"
+      >
+        {loading ? 'Deleting...' : 'Delete Ticket'}
+      </button>
+    </div>
+  ) : null
+
   const serviceRequestSection = (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
       <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
@@ -522,6 +553,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           >
             {loading ? 'Starting...' : 'Start Work'}
           </button>
+          {deleteButton}
         </div>
         {serviceRequestSection}
       </>
@@ -848,6 +880,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           )}
         </div>
         {serviceRequestSection}
+        {deleteButton}
       </>
     )
   }
@@ -893,6 +926,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             </button>
           </div>
         )}
+        {deleteButton}
       </div>
     )
   }
@@ -1031,6 +1065,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           </div>
         </div>
       )}
+      {deleteButton}
     </div>
   )
 }
