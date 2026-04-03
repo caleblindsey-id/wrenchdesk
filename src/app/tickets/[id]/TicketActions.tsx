@@ -121,6 +121,10 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
   )
   const [signatureImage, setSignatureImage] = useState<string | null>(null)
   const [signatureName, setSignatureName] = useState('')
+  const [poNumber, setPoNumber] = useState(ticket.po_number ?? '')
+  const [billingContactName, setBillingContactName] = useState(ticket.billing_contact_name ?? '')
+  const [billingContactEmail, setBillingContactEmail] = useState(ticket.billing_contact_email ?? '')
+  const [billingContactPhone, setBillingContactPhone] = useState(ticket.billing_contact_phone ?? '')
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
@@ -220,6 +224,10 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           customerSignature: signatureImage,
           customerSignatureName: signatureName.trim(),
           photos: photos.map(({ storage_path, uploaded_at }) => ({ storage_path, uploaded_at })),
+          poNumber: poNumber || undefined,
+          billingContactName: billingContactName || undefined,
+          billingContactEmail: billingContactEmail || undefined,
+          billingContactPhone: billingContactPhone || undefined,
         }),
       })
       if (!res.ok) {
@@ -255,6 +263,10 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           completion_notes: completionNotes || null,
           parts_used: partsUsed.length > 0 ? partsUsed : null,
           photos: photos.map(({ storage_path, uploaded_at }) => ({ storage_path, uploaded_at })),
+          po_number: poNumber || null,
+          billing_contact_name: billingContactName || null,
+          billing_contact_email: billingContactEmail || null,
+          billing_contact_phone: billingContactPhone || null,
         }),
       })
       if (!res.ok) {
@@ -752,6 +764,50 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                 placeholder="Notes about the work performed..."
               />
+            </div>
+
+            {/* PO Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                PO Number
+              </label>
+              <input
+                type="text"
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                placeholder="Enter PO number if required..."
+              />
+            </div>
+
+            {/* Billing Contact */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Billing Contact
+              </label>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={billingContactName}
+                  onChange={(e) => setBillingContactName(e.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  placeholder="Name"
+                />
+                <input
+                  type="email"
+                  value={billingContactEmail}
+                  onChange={(e) => setBillingContactEmail(e.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  placeholder="Email"
+                />
+                <input
+                  type="tel"
+                  value={billingContactPhone}
+                  onChange={(e) => setBillingContactPhone(e.target.value)}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  placeholder="Phone"
+                />
+              </div>
             </div>
 
             {!isTech && (

@@ -8,7 +8,7 @@ export type TicketWithJoins = PmTicketRow & {
 }
 
 export type TicketDetail = PmTicketRow & {
-  customers: { name: string; account_number: string | null; billing_city: string | null } | null
+  customers: { name: string; account_number: string | null; billing_city: string | null; po_required: boolean; ar_terms: string | null } | null
   equipment: { make: string | null; model: string | null; serial_number: string | null; ship_to_locations: { city: string | null } | null } | null
   assigned_technician: { name: string } | null
   created_by: { name: string } | null
@@ -72,7 +72,7 @@ export async function getTicket(id: string): Promise<TicketDetail | null> {
     .from('pm_tickets')
     .select(`
       *,
-      customers(name, account_number, billing_city),
+      customers(name, account_number, billing_city, po_required, ar_terms),
       equipment(make, model, serial_number, ship_to_locations(city)),
       assigned_technician:users!assigned_technician_id(name),
       created_by:users!created_by_id(name),
@@ -117,6 +117,10 @@ export async function completeTicket(
     customerSignature: string
     customerSignatureName: string
     photos: TicketPhoto[]
+    poNumber: string | null
+    billingContactName: string | null
+    billingContactEmail: string | null
+    billingContactPhone: string | null
   }
 ): Promise<PmTicketRow> {
   const supabase = await createClient()
@@ -133,6 +137,10 @@ export async function completeTicket(
       customer_signature: data.customerSignature,
       customer_signature_name: data.customerSignatureName,
       photos: data.photos,
+      po_number: data.poNumber,
+      billing_contact_name: data.billingContactName,
+      billing_contact_email: data.billingContactEmail,
+      billing_contact_phone: data.billingContactPhone,
     })
     .eq('id', id)
     .select()

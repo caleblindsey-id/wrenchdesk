@@ -15,6 +15,10 @@ const ALLOWED_FIELDS = [
   'parts_used',
   'billing_amount',
   'photos',
+  'po_number',
+  'billing_contact_name',
+  'billing_contact_email',
+  'billing_contact_phone',
 ] as const
 
 // Techs can update status + draft completion fields (save progress)
@@ -25,6 +29,10 @@ const TECH_ALLOWED_FIELDS = [
   'hours_worked',
   'parts_used',
   'photos',
+  'po_number',
+  'billing_contact_name',
+  'billing_contact_email',
+  'billing_contact_phone',
 ] as const
 
 type AllowedUpdate = Pick<PmTicketRow, typeof ALLOWED_FIELDS[number]>

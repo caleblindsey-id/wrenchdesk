@@ -116,6 +116,22 @@ export default async function TicketDetailPage({
               {ticket.assigned_technician?.name ?? '—'}
             </p>
           </div>
+          <div>
+            <span className="text-gray-500">AR Terms</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.customers?.ar_terms ?? '—'}
+            </p>
+          </div>
+          <div>
+            <span className="text-gray-500">PO Required</span>
+            <p className="text-gray-900 font-medium">
+              {ticket.customers?.po_required ? (
+                <span className="text-red-700 font-bold">YES — PO REQUIRED</span>
+              ) : (
+                'No'
+              )}
+            </p>
+          </div>
         </div>
       </div>
 

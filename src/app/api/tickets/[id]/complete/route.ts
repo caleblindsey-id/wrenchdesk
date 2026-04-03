@@ -13,6 +13,10 @@ interface CompleteTicketBody {
   customerSignature: string
   customerSignatureName: string
   photos: TicketPhoto[]
+  poNumber?: string
+  billingContactName?: string
+  billingContactEmail?: string
+  billingContactPhone?: string
 }
 
 export async function POST(
@@ -23,7 +27,7 @@ export async function POST(
     const { id } = await params
     const body = await request.json() as CompleteTicketBody
 
-    const { completedDate, hoursWorked, partsUsed, completionNotes, billingAmount, customerSignature, customerSignatureName, photos } = body
+    const { completedDate, hoursWorked, partsUsed, completionNotes, billingAmount, customerSignature, customerSignatureName, photos, poNumber, billingContactName, billingContactEmail, billingContactPhone } = body
 
     if (!completedDate || hoursWorked === undefined || billingAmount === undefined) {
       return NextResponse.json(
@@ -100,6 +104,10 @@ export async function POST(
       customerSignature,
       customerSignatureName,
       photos: photos ?? [],
+      poNumber: poNumber ?? null,
+      billingContactName: billingContactName ?? null,
+      billingContactEmail: billingContactEmail ?? null,
+      billingContactPhone: billingContactPhone ?? null,
     })
 
     return NextResponse.json(updated)
