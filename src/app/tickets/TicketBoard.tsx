@@ -47,6 +47,7 @@ export default function TicketBoard({
   const [year, setYear] = useState(currentYear)
   const [techFilter, setTechFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [assignTo, setAssignTo] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
@@ -61,6 +62,7 @@ export default function TicketBoard({
     params.set('year', year.toString())
     if (techFilter) params.set('tech', techFilter)
     if (statusFilter) params.set('status', statusFilter)
+    if (typeFilter) params.set('type', typeFilter)
     router.push(`/tickets?${params.toString()}`)
   }
 
@@ -204,6 +206,18 @@ export default function TicketBoard({
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
+            </select>
+          </div>
+          <div className="w-full lg:w-auto">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            >
+              <option value="">All Types</option>
+              <option value="pm">PM</option>
+              <option value="service_request">Service Request</option>
             </select>
           </div>
           <button

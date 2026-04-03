@@ -7,7 +7,7 @@ import TicketBoard from './TicketBoard'
 export default async function TicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; year?: string; tech?: string; status?: string }>
+  searchParams: Promise<{ month?: string; year?: string; tech?: string; status?: string; type?: string }>
 }) {
   const params = await searchParams
   const now = new Date()
@@ -25,6 +25,7 @@ export default async function TicketsPage({
     filters!.technicianId = params.tech
   }
   if (params.status) filters!.status = params.status as TicketStatus
+  if (params.type) filters!.ticketType = params.type as 'pm' | 'service_request'
 
   let tickets: Awaited<ReturnType<typeof getTickets>> = []
   let users: Awaited<ReturnType<typeof getUsers>> = []

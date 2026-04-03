@@ -21,6 +21,7 @@ export async function getTickets(filters?: {
   technicianId?: string
   status?: TicketStatus
   customerId?: number
+  ticketType?: 'pm' | 'service_request'
 }): Promise<TicketWithJoins[]> {
   const supabase = await createClient()
 
@@ -52,6 +53,10 @@ export async function getTickets(filters?: {
 
   if (filters?.customerId !== undefined) {
     query = query.eq('customer_id', filters.customerId)
+  }
+
+  if (filters?.ticketType) {
+    query = query.eq('ticket_type', filters.ticketType)
   }
 
   const { data, error } = await query
