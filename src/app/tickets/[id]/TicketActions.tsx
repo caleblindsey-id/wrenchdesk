@@ -822,13 +822,37 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
               )}
             </div>
           </form>
+          {userRole === 'manager' && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-2">Manager: Reset ticket status</p>
+              {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { if (confirm('Reset this ticket to Assigned? Draft work will be cleared.')) handleReopen('assigned') }}
+                  disabled={loading}
+                  className="px-3 py-2 text-xs font-medium text-orange-700 bg-white border border-orange-300 rounded-md hover:bg-orange-50 disabled:opacity-50 transition-colors"
+                >
+                  Reset to Assigned
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { if (confirm('Reset this ticket to Unassigned? Draft work and technician assignment will be cleared.')) handleReopen('unassigned') }}
+                  disabled={loading}
+                  className="px-3 py-2 text-xs font-medium text-orange-700 bg-white border border-orange-300 rounded-md hover:bg-orange-50 disabled:opacity-50 transition-colors"
+                >
+                  Reset to Unassigned
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         {serviceRequestSection}
       </>
     )
   }
 
-  async function handleReopen(targetStatus: 'in_progress' | 'unassigned' = 'in_progress') {
+  async function handleReopen(targetStatus: string = 'in_progress') {
     setLoading(true)
     setError(null)
     try {
@@ -969,6 +993,42 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           >
             {loading ? 'Reopening...' : 'Reopen Ticket'}
           </button>
+        </div>
+      )}
+      {ticket.status === 'billed' && userRole === 'manager' && (
+        <div className="mt-5 pt-4 border-t border-gray-200">
+          <p className="text-xs text-gray-500 mb-2">Manager: Reset ticket status</p>
+          {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => { if (confirm('Move back to Completed? Billing export flag will be cleared.')) handleReopen('completed') }}
+              disabled={loading}
+              className="px-3 py-2 text-xs font-medium text-orange-700 bg-white border border-orange-300 rounded-md hover:bg-orange-50 disabled:opacity-50 transition-colors"
+            >
+              Back to Completed
+            </button>
+            <button
+              onClick={() => { if (confirm('Reset to In Progress? All completion data will be cleared.')) handleReopen('in_progress') }}
+              disabled={loading}
+              className="px-3 py-2 text-xs font-medium text-orange-700 bg-white border border-orange-300 rounded-md hover:bg-orange-50 disabled:opacity-50 transition-colors"
+            >
+              Back to In Progress
+            </button>
+            <button
+              onClick={() => { if (confirm('Reset to Assigned? All completion data will be cleared.')) handleReopen('assigned') }}
+              disabled={loading}
+              className="px-3 py-2 text-xs font-medium text-orange-700 bg-white border border-orange-300 rounded-md hover:bg-orange-50 disabled:opacity-50 transition-colors"
+            >
+              Back to Assigned
+            </button>
+            <button
+              onClick={() => { if (confirm('Reset to Unassigned? All data including technician assignment will be cleared.')) handleReopen('unassigned') }}
+              disabled={loading}
+              className="px-3 py-2 text-xs font-medium text-orange-700 bg-white border border-orange-300 rounded-md hover:bg-orange-50 disabled:opacity-50 transition-colors"
+            >
+              Back to Unassigned
+            </button>
+          </div>
         </div>
       )}
     </div>

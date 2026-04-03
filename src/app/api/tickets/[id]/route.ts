@@ -33,9 +33,9 @@ type AllowedUpdate = Pick<PmTicketRow, typeof ALLOWED_FIELDS[number]>
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   unassigned: ['assigned', 'in_progress', 'skipped'],
   assigned:   ['in_progress', 'unassigned', 'skipped'],
-  in_progress: ['completed'],
+  in_progress: ['completed', 'assigned', 'unassigned'],
   completed:  ['billed', 'in_progress'],
-  billed:     [],
+  billed:     ['completed', 'in_progress', 'assigned', 'unassigned'],
   skipped:    ['unassigned'],
 }
 
@@ -119,6 +119,48 @@ export async function PATCH(
               photos: [],
             }
           : { status: 'unassigned' as const }
+        const updated = await updateTicket(id, updateData as any)
+        return NextResponse.json(updated)
+      }
+
+      // Manager-only status resets (backwards transitions)
+      const isReset =
+        (currentStatus === 'in_progress' && (nextStatus === 'assigned' || nextStatus === 'unassigned')) ||
+        (currentStatus === 'billed')
+      if (isReset) {
+        if (user.role !== 'manager') {
+          return NextResponse.json({ error: 'Only managers can reset ticket status' }, { status: 403 })
+        }
+
+        const clearCompletion = {
+          completed_date: null,
+          completion_notes: null,
+          hours_worked: null,
+          parts_used: null,
+          billing_amount: null,
+          customer_signature: null,
+          customer_signature_name: null,
+          photos: [],
+        }
+
+        let updateData: Record<string, unknown> = { status: nextStatus }
+
+        if (currentStatus === 'billed') {
+          updateData.billing_exported = false
+          // Keep completion data only when going back to completed
+          if (nextStatus !== 'completed') {
+            updateData = { ...updateData, ...clearCompletion }
+          }
+        } else {
+          // in_progress → assigned/unassigned: clear draft data
+          updateData = { ...updateData, ...clearCompletion }
+        }
+
+        // Clear technician assignment when resetting to unassigned
+        if (nextStatus === 'unassigned') {
+          updateData.assigned_technician_id = null
+        }
+
         const updated = await updateTicket(id, updateData as any)
         return NextResponse.json(updated)
       }
