@@ -101,7 +101,12 @@ export async function POST(request: NextRequest) {
         month,
         year,
         status,
-        parts_used: [],
+        parts_used: (equipment.default_products ?? []).map((p) => ({
+          synergy_product_id: p.synergy_product_id,
+          quantity: p.quantity,
+          description: p.description,
+          unit_price: 0,
+        })),
         created_by_id: user?.id ?? null,
       })
     }

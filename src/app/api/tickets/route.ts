@@ -58,6 +58,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fetch default products from equipment if one is specified
+    let defaultParts: Array<{ synergy_product_id: number; quantity: number; description: string; unit_price: number }> = []
+    if (equipment_id) {
+      const { data: equip } = await supabase
+        .from('equipment')
+        .select('default_products')
+        .eq('id', equipment_id)
+        .single()
+      if (equip?.default_products && Array.isArray(equip.default_products)) {
+        defaultParts = equip.default_products.map((p: { synergy_product_id: number; quantity: number; description: string }) => ({
+          synergy_product_id: p.synergy_product_id,
+          quantity: p.quantity,
+          description: p.description,
+          unit_price: 0,
+        }))
+      }
+    }
+
     const { data: ticket, error: insertError } = await supabase
       .from('pm_tickets')
       .insert({
@@ -68,7 +86,7 @@ export async function POST(request: NextRequest) {
         month,
         year,
         status,
-        parts_used: [],
+        parts_used: defaultParts,
         scheduled_date: scheduled_date ?? null,
         created_by_id: user?.id ?? null,
       })

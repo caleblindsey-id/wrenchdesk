@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import EquipmentForm from './EquipmentForm'
 import ScheduleSection from './ScheduleSection'
+import DefaultProductsSection from './DefaultProductsSection'
 import StatusBadge from '@/components/StatusBadge'
 
 export default async function EquipmentDetailPage({
@@ -58,6 +59,11 @@ export default async function EquipmentDetailPage({
       <ScheduleSection
         equipmentId={equipment.id}
         schedule={activeSchedule ?? null}
+      />
+
+      <DefaultProductsSection
+        equipmentId={equipment.id}
+        initialProducts={equipment.default_products ?? []}
       />
 
       {/* Ticket history */}

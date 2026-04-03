@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { BillingType } from '@/types/database'
-import { X } from 'lucide-react'
+import { BillingType, DefaultProduct } from '@/types/database'
+import { X, Plus, Minus, Trash2 } from 'lucide-react'
 
 interface CustomerOption {
   id: number
@@ -14,6 +14,13 @@ interface CustomerOption {
 interface TechnicianOption {
   id: string
   name: string
+}
+
+interface ProductSearchResult {
+  id: number
+  synergy_id: string
+  number: string
+  description: string | null
 }
 
 const MONTHS = [
@@ -73,6 +80,15 @@ export default function AddEquipmentModal({
   // Default technician
   const [technicians, setTechnicians] = useState<TechnicianOption[]>([])
   const [defaultTechId, setDefaultTechId] = useState('')
+
+  // Default Products
+  const [defaultProducts, setDefaultProducts] = useState<DefaultProduct[]>([])
+  const [productSearch, setProductSearch] = useState('')
+  const [productResults, setProductResults] = useState<ProductSearchResult[]>([])
+  const [productComboOpen, setProductComboOpen] = useState(false)
+  const [productSearching, setProductSearching] = useState(false)
+  const productDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const productComboRef = useRef<HTMLDivElement>(null)
 
   // PM Schedule
   const [addSchedule, setAddSchedule] = useState(false)
@@ -145,6 +161,72 @@ export default function AddEquipmentModal({
       })
   }, [customerId])
 
+  // Debounced product search
+  useEffect(() => {
+    if (!productSearch.trim()) {
+      setProductResults([])
+      setProductComboOpen(false)
+      return
+    }
+    if (productDebounceRef.current) clearTimeout(productDebounceRef.current)
+    productDebounceRef.current = setTimeout(async () => {
+      setProductSearching(true)
+      const supabase = createClient()
+      const q = productSearch.trim()
+      const { data } = await supabase
+        .from('products')
+        .select('id, synergy_id, number, description')
+        .or(`number.ilike.%${q}%,description.ilike.%${q}%`)
+        .order('number')
+        .limit(25)
+      setProductResults((data as ProductSearchResult[]) ?? [])
+      setProductComboOpen(true)
+      setProductSearching(false)
+    }, 300)
+  }, [productSearch])
+
+  // Close product dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (productComboRef.current && !productComboRef.current.contains(e.target as Node)) {
+        setProductComboOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  function selectProduct(p: ProductSearchResult) {
+    // Don't add duplicates
+    if (defaultProducts.some((dp) => dp.synergy_product_id === p.id)) {
+      setProductSearch('')
+      setProductComboOpen(false)
+      return
+    }
+    setDefaultProducts((prev) => [
+      ...prev,
+      {
+        synergy_product_id: p.id,
+        quantity: 1,
+        description: `${p.number} - ${p.description ?? ''}`.trim(),
+      },
+    ])
+    setProductSearch('')
+    setProductComboOpen(false)
+  }
+
+  function updateProductQuantity(idx: number, delta: number) {
+    setDefaultProducts((prev) =>
+      prev.map((p, i) =>
+        i === idx ? { ...p, quantity: Math.max(1, p.quantity + delta) } : p
+      )
+    )
+  }
+
+  function removeProduct(idx: number) {
+    setDefaultProducts((prev) => prev.filter((_, i) => i !== idx))
+  }
+
   function selectCustomer(c: CustomerOption) {
     setCustomerId(String(c.id))
     setCustomerSearch(c.account_number ? `${c.name} (${c.account_number})` : c.name)
@@ -164,6 +246,10 @@ export default function AddEquipmentModal({
     setDescription('')
     setLocationOnSite('')
     setDefaultTechId('')
+    setDefaultProducts([])
+    setProductSearch('')
+    setProductResults([])
+    setProductComboOpen(false)
     setAddSchedule(false)
     setIntervalMonths(3)
     setAnchorMonth(1)
@@ -191,6 +277,7 @@ export default function AddEquipmentModal({
         serial_number: serialNumber || null,
         description: description || null,
         location_on_site: locationOnSite || null,
+        default_products: defaultProducts.length > 0 ? defaultProducts : [],
         active: true,
       })
       .select()
@@ -458,6 +545,85 @@ export default function AddEquipmentModal({
                 )}
               </div>
             )}
+          </div>
+
+          {/* Default Products */}
+          <div className="pt-2 border-t border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Default Products
+              <span className="text-gray-400 font-normal ml-1">(included on every PM at no charge)</span>
+            </label>
+
+            {/* Added products list */}
+            {defaultProducts.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {defaultProducts.map((dp, idx) => (
+                  <div
+                    key={dp.synergy_product_id}
+                    className="flex items-center gap-2 bg-gray-50 rounded-md px-3 py-2 text-sm"
+                  >
+                    <span className="flex-1 text-gray-900 truncate">{dp.description}</span>
+                    <button
+                      type="button"
+                      onClick={() => updateProductQuantity(idx, -1)}
+                      className="p-1 text-gray-400 hover:text-gray-600"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="text-gray-700 font-medium w-6 text-center">{dp.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => updateProductQuantity(idx, 1)}
+                      className="p-1 text-gray-400 hover:text-gray-600"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeProduct(idx)}
+                      className="p-1 text-red-400 hover:text-red-600 ml-1"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Product search */}
+            <div ref={productComboRef} className="relative">
+              <input
+                type="text"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                onFocus={() => { if (productResults.length > 0) setProductComboOpen(true) }}
+                placeholder="Search products by number or description..."
+                autoComplete="off"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
+              />
+              {productSearching && (
+                <p className="text-xs text-gray-400 mt-1">Searching...</p>
+              )}
+              {productComboOpen && productResults.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto text-sm">
+                  {productResults.map((p) => (
+                    <li
+                      key={p.id}
+                      onMouseDown={() => selectProduct(p)}
+                      className="px-3 py-2 cursor-pointer hover:bg-slate-50"
+                    >
+                      <span className="font-medium text-gray-900">{p.number}</span>
+                      {p.description && (
+                        <span className="text-gray-500 ml-2">{p.description}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {productComboOpen && !productSearching && productSearch.trim() && productResults.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1">No products found.</p>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
