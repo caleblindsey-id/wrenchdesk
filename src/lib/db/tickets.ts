@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { PmTicketRow, PmTicketUpdate, TicketStatus, PartUsed, BillingType } from '@/types/database'
+import { PmTicketRow, PmTicketUpdate, TicketStatus, PartUsed, TicketPhoto, BillingType } from '@/types/database'
 
 export type TicketWithJoins = PmTicketRow & {
   customers: { name: string } | null
@@ -116,6 +116,7 @@ export async function completeTicket(
     billingAmount: number
     customerSignature: string
     customerSignatureName: string
+    photos: TicketPhoto[]
   }
 ): Promise<PmTicketRow> {
   const supabase = await createClient()
@@ -131,6 +132,7 @@ export async function completeTicket(
       billing_amount: data.billingAmount,
       customer_signature: data.customerSignature,
       customer_signature_name: data.customerSignatureName,
+      photos: data.photos,
     })
     .eq('id', id)
     .select()

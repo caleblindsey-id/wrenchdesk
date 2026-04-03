@@ -31,6 +31,7 @@ interface BillingTicket {
   poRequired: boolean
   customerSignature: string | null
   customerSignatureName: string | null
+  photoUrls: string[]
 }
 
 interface BillingDocumentProps {
@@ -207,6 +208,20 @@ const styles = StyleSheet.create({
     color: '#444444',
     marginTop: 2,
   },
+  // Service photos
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  photoImage: {
+    width: 160,
+    height: 120,
+    objectFit: 'contain' as const,
+    borderWidth: 0.5,
+    borderColor: '#cccccc',
+  },
   // Divider between tickets
   ticketDivider: {
     borderBottomWidth: 0.5,
@@ -320,6 +335,18 @@ function TicketSection({ ticket }: { ticket: BillingTicket }) {
         <Text style={styles.fieldLabel}>Notes:</Text>
         <Text style={styles.fieldValue}>{dash(ticket.completionNotes)}</Text>
       </View>
+
+      {/* SERVICE PHOTOS */}
+      {ticket.photoUrls.length > 0 && (
+        <View>
+          <Text style={styles.sectionLabel}>Service Photos</Text>
+          <View style={styles.photoGrid}>
+            {ticket.photoUrls.map((url, idx) => (
+              <Image key={idx} src={url} style={styles.photoImage} />
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* PARTS & MATERIALS */}
       <Text style={styles.sectionLabel}>

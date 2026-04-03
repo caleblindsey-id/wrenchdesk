@@ -37,6 +37,7 @@ interface BillingTicket {
   poRequired: boolean
   customerSignature: string | null
   customerSignatureName: string | null
+  photoUrls: string[]
 }
 
 // Raw Supabase join shape
@@ -70,6 +71,7 @@ interface RawTicket {
   pm_schedules: { billing_type: string | null; flat_rate: number | null } | null
   customer_signature: string | null
   customer_signature_name: string | null
+  photos: Array<{ storage_path: string; uploaded_at: string }> | null
 }
 
 // ============================================================
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
         billing_amount,
         customer_signature,
         customer_signature_name,
+        photos,
         customers(name, account_number, ar_terms, billing_address, po_required),
         equipment(make, model, serial_number, location_on_site),
         technician:users!assigned_technician_id(name),
@@ -184,6 +187,24 @@ export async function POST(request: NextRequest) {
           productDescMap.set(Number(p.synergy_id), p.description)
         }
       }
+    }
+
+    // --- Generate signed URLs for ticket photos ---
+    const photoUrlMap = new Map<string, string[]>()
+    for (const raw of rawTickets as RawTicket[]) {
+      const photos = raw.photos ?? []
+      const urls: string[] = []
+      for (const photo of photos) {
+        try {
+          const { data } = await supabase.storage
+            .from('ticket-photos')
+            .createSignedUrl(photo.storage_path, 120)
+          if (data?.signedUrl) urls.push(data.signedUrl)
+        } catch {
+          // Skip failed photos rather than failing the entire PDF
+        }
+      }
+      photoUrlMap.set(raw.id, urls)
     }
 
     // --- Map raw tickets to BillingTicket[] ---
@@ -231,6 +252,7 @@ export async function POST(request: NextRequest) {
         poRequired: raw.customers?.po_required ?? false,
         customerSignature: raw.customer_signature ?? null,
         customerSignatureName: raw.customer_signature_name ?? null,
+        photoUrls: photoUrlMap.get(raw.id) ?? [],
       }
     })
 

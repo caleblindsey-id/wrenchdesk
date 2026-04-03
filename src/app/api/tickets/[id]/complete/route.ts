@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { completeTicket } from '@/lib/db/tickets'
 import { getCurrentUser, isTechnician } from '@/lib/auth'
-import { PartUsed } from '@/types/database'
+import { PartUsed, TicketPhoto } from '@/types/database'
 
 interface CompleteTicketBody {
   completedDate: string
@@ -12,6 +12,7 @@ interface CompleteTicketBody {
   billingAmount: number
   customerSignature: string
   customerSignatureName: string
+  photos: TicketPhoto[]
 }
 
 export async function POST(
@@ -22,7 +23,7 @@ export async function POST(
     const { id } = await params
     const body = await request.json() as CompleteTicketBody
 
-    const { completedDate, hoursWorked, partsUsed, completionNotes, billingAmount, customerSignature, customerSignatureName } = body
+    const { completedDate, hoursWorked, partsUsed, completionNotes, billingAmount, customerSignature, customerSignatureName, photos } = body
 
     if (!completedDate || hoursWorked === undefined || billingAmount === undefined) {
       return NextResponse.json(
@@ -98,6 +99,7 @@ export async function POST(
       billingAmount: finalBillingAmount,
       customerSignature,
       customerSignatureName,
+      photos: photos ?? [],
     })
 
     return NextResponse.json(updated)

@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { TicketDetail } from '@/lib/db/tickets'
-import { PartUsed, UserRole } from '@/types/database'
+import { PartUsed, TicketPhoto, UserRole } from '@/types/database'
 import { createClient } from '@/lib/supabase/client'
+import { compressImage } from '@/lib/image-utils'
 import SignaturePad from '@/components/SignaturePad'
 
 interface ProductResult {
@@ -32,6 +33,40 @@ interface TicketActionsProps {
   userRole: UserRole | null
   userId: string | null
   laborRate: number
+}
+
+function ReadOnlyPhotos({ photos }: { photos: TicketPhoto[] }) {
+  const [urls, setUrls] = useState<string[]>([])
+  useEffect(() => {
+    const supabase = createClient()
+    Promise.all(
+      photos.map(async (p) => {
+        const { data } = await supabase.storage
+          .from('ticket-photos')
+          .createSignedUrl(p.storage_path, 3600)
+        return data?.signedUrl ?? ''
+      })
+    ).then(setUrls)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (urls.length === 0 && photos.length > 0) return null
+
+  return (
+    <div className="mt-4">
+      <span className="text-sm text-gray-500">Service Photos</span>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {urls.map((url, i) => (
+          url ? (
+            <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-md overflow-hidden border border-gray-200">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt={`Service photo ${i + 1}`} className="w-full h-full object-cover" />
+            </a>
+          ) : null
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function TicketActions({ ticket, userRole, userId, laborRate }: TicketActionsProps) {
@@ -88,6 +123,28 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
   const [signatureName, setSignatureName] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  // Photo state
+  const [photos, setPhotos] = useState<Array<TicketPhoto & { previewUrl?: string }>>(
+    ticket.photos && ticket.photos.length > 0 ? ticket.photos : []
+  )
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load preview URLs for existing photos
+  useEffect(() => {
+    if (!photos.length || photos[0]?.previewUrl) return
+    const supabase = createClient()
+    Promise.all(
+      photos.map(async (p) => {
+        const { data } = await supabase.storage
+          .from('ticket-photos')
+          .createSignedUrl(p.storage_path, 3600)
+        return { ...p, previewUrl: data?.signedUrl ?? undefined }
+      })
+    ).then(setPhotos)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const debounceRefs = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
   const comboRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
@@ -162,6 +219,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             : (parseFloat(billingAmount) || 0),
           customerSignature: signatureImage,
           customerSignatureName: signatureName.trim(),
+          photos: photos.map(({ storage_path, uploaded_at }) => ({ storage_path, uploaded_at })),
         }),
       })
       if (!res.ok) {
@@ -196,6 +254,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           hours_worked: parseFloat(hoursWorked) || null,
           completion_notes: completionNotes || null,
           parts_used: partsUsed.length > 0 ? partsUsed : null,
+          photos: photos.map(({ storage_path, uploaded_at }) => ({ storage_path, uploaded_at })),
         }),
       })
       if (!res.ok) {
@@ -209,6 +268,44 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    setUploading(true)
+    setError(null)
+    try {
+      const supabase = createClient()
+      const newPhotos: Array<TicketPhoto & { previewUrl?: string }> = []
+      for (const file of Array.from(files)) {
+        const compressed = await compressImage(file)
+        const id = crypto.randomUUID()
+        const path = `${ticket.id}/${id}.jpg`
+        const { error: uploadError } = await supabase.storage
+          .from('ticket-photos')
+          .upload(path, compressed, { contentType: 'image/jpeg' })
+        if (uploadError) throw uploadError
+        newPhotos.push({
+          storage_path: path,
+          uploaded_at: new Date().toISOString(),
+          previewUrl: URL.createObjectURL(compressed),
+        })
+      }
+      setPhotos((prev) => [...prev, ...newPhotos])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload photo')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handlePhotoDelete(index: number) {
+    const photo = photos[index]
+    const supabase = createClient()
+    await supabase.storage.from('ticket-photos').remove([photo.storage_path])
+    setPhotos((prev) => prev.filter((_, i) => i !== index))
   }
 
   async function handleServiceRequest(e: React.FormEvent) {
@@ -651,6 +748,52 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
               </div>
             )}
 
+            {/* Photos */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Service Photos
+              </label>
+              {photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {photos.map((photo, i) => (
+                    <div key={photo.storage_path} className="relative aspect-square rounded-md overflow-hidden border border-gray-200 bg-gray-100">
+                      {photo.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={photo.previewUrl} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Loading...</div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handlePhotoDelete(i)}
+                        className="absolute top-1 right-1 w-7 h-7 flex items-center justify-center bg-black/60 text-white rounded-full text-sm hover:bg-black/80 min-h-[44px] min-w-[44px] -mt-2 -mr-2 p-0"
+                        style={{ minHeight: 44, minWidth: 44, marginTop: -10, marginRight: -10 }}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="px-4 py-3 sm:py-2 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 transition-colors min-h-[44px]"
+              >
+                {uploading ? 'Uploading...' : '+ Add Photo'}
+              </button>
+            </div>
+
             <SignaturePad
               onSignatureChange={({ image, name: sigName }) => {
                 setSignatureImage(image)
@@ -662,14 +805,14 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
               <button
                 type="button"
                 onClick={handleSaveProgress}
-                disabled={saving || loading}
+                disabled={saving || loading || uploading}
                 className="px-4 py-3 sm:py-2 text-sm font-medium text-slate-800 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 transition-colors min-h-[44px]"
               >
                 {saving ? 'Saving...' : 'Save Progress'}
               </button>
               <button
                 type="submit"
-                disabled={loading || saving}
+                disabled={loading || saving || uploading}
                 className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors min-h-[44px]"
               >
                 {loading ? 'Completing...' : 'Mark Complete'}
@@ -794,6 +937,9 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             {ticket.completion_notes}
           </p>
         </div>
+      )}
+      {ticket.photos && ticket.photos.length > 0 && (
+        <ReadOnlyPhotos photos={ticket.photos} />
       )}
       {ticket.customer_signature && (
         <div className="mt-4 pt-4 border-t border-gray-200">
