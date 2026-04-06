@@ -1,9 +1,12 @@
 import { getTicket } from '@/lib/db/tickets'
+import { getEquipmentServiceHistory } from '@/lib/db/equipment'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ExternalLink } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import TicketActions from './TicketActions'
+import ServiceHistory from '@/components/ServiceHistory'
+import EquipmentNotes from '@/components/EquipmentNotes'
 import { getCurrentUser, isTechnician } from '@/lib/auth'
 import { getSetting } from '@/lib/db/settings'
 
@@ -27,6 +30,12 @@ export default async function TicketDetailPage({
   }
 
   const laborRate = laborRateStr ? parseFloat(laborRateStr) : 75
+
+  const serviceHistory = ticket.equipment_id
+    ? await getEquipmentServiceHistory(ticket.equipment_id, ticket.id)
+    : []
+
+  const showBilling = user?.role === 'manager' || user?.role === 'coordinator'
 
   const equipmentLabel = [ticket.equipment?.make, ticket.equipment?.model]
     .filter(Boolean)
@@ -76,7 +85,18 @@ export default async function TicketDetailPage({
           </div>
           <div>
             <span className="text-gray-500">Equipment</span>
-            <p className="text-gray-900 font-medium">{equipmentLabel}</p>
+            <p className="text-gray-900 font-medium">
+              {equipmentLabel}
+              {ticket.equipment_id && (
+                <Link
+                  href={`/equipment/${ticket.equipment_id}`}
+                  className="inline-flex items-center ml-2 text-blue-600 hover:text-blue-800"
+                  title="View equipment details"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              )}
+            </p>
           </div>
           <div>
             <span className="text-gray-500">Serial Number</span>
@@ -142,6 +162,20 @@ export default async function TicketDetailPage({
         userId={user?.id ?? null}
         laborRate={laborRate}
       />
+
+      {/* Service History */}
+      {ticket.equipment_id && (
+        <ServiceHistory
+          tickets={serviceHistory}
+          showBilling={showBilling}
+          collapsible
+        />
+      )}
+
+      {/* Equipment Notes */}
+      {ticket.equipment_id && (
+        <EquipmentNotes equipmentId={ticket.equipment_id} />
+      )}
     </div>
   )
 }

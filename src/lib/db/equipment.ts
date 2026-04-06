@@ -84,6 +84,28 @@ export async function getEquipmentDetail(id: string): Promise<EquipmentDetail | 
   } as unknown as EquipmentDetail
 }
 
+export async function getEquipmentServiceHistory(
+  equipmentId: string,
+  excludeTicketId?: string
+): Promise<PmTicketRow[]> {
+  const supabase = await createClient()
+
+  let query = supabase
+    .from('pm_tickets')
+    .select('*')
+    .eq('equipment_id', equipmentId)
+    .in('status', ['completed', 'billed'])
+    .order('completed_date', { ascending: false })
+
+  if (excludeTicketId) {
+    query = query.neq('id', excludeTicketId)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return data as PmTicketRow[]
+}
+
 export async function createEquipment(data: EquipmentInsert): Promise<EquipmentRow> {
   const supabase = await createClient()
 

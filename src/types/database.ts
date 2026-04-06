@@ -161,6 +161,14 @@ export type PmTicketRow = {
   updated_at: string
 }
 
+export type EquipmentNoteRow = {
+  id: string
+  equipment_id: string
+  user_id: string
+  note_text: string
+  created_at: string
+}
+
 export type SyncLogRow = {
   id: number
   sync_type: SyncType | null
@@ -394,6 +402,27 @@ export interface Database {
         Insert: SettingsRow
         Update: Partial<SettingsRow>
         Relationships: []
+      }
+      equipment_notes: {
+        Row: EquipmentNoteRow
+        Insert: Omit<EquipmentNoteRow, 'id' | 'created_at'>
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'equipment_notes_equipment_id_fkey'
+            columns: ['equipment_id']
+            isOneToOne: false
+            referencedRelation: 'equipment'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'equipment_notes_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
       }
       sync_log: {
         Row: SyncLogRow

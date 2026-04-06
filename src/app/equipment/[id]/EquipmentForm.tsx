@@ -9,9 +9,10 @@ interface EquipmentFormProps {
   equipment: EquipmentRow & { customers: { name: string } | null }
   users: UserRow[]
   shipToLocations: {id: number; name: string | null; city: string | null}[]
+  readOnly?: boolean
 }
 
-export default function EquipmentForm({ equipment, users, shipToLocations }: EquipmentFormProps) {
+export default function EquipmentForm({ equipment, users, shipToLocations, readOnly = false }: EquipmentFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -67,42 +68,42 @@ export default function EquipmentForm({ equipment, users, shipToLocations }: Equ
       <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
         Equipment Details
       </h2>
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-      {success && <p className="text-sm text-green-600 mb-3">Saved.</p>}
+      {!readOnly && error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+      {!readOnly && success && <p className="text-sm text-green-600 mb-3">Saved.</p>}
       <form onSubmit={handleSubmit} className="space-y-3 max-w-xl">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Make</label>
-            <input type="text" value={make} onChange={(e) => setMake(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+            <input type="text" value={make} onChange={(e) => setMake(e.target.value)} disabled={readOnly} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-            <input type="text" value={model} onChange={(e) => setModel(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+            <input type="text" value={model} onChange={(e) => setModel(e.target.value)} disabled={readOnly} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500" />
           </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
-          <input type="text" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+          <input type="text" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} disabled={readOnly} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} disabled={readOnly} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Location on Site</label>
-          <input type="text" value={locationOnSite} onChange={(e) => setLocationOnSite(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+          <input type="text" value={locationOnSite} onChange={(e) => setLocationOnSite(e.target.value)} disabled={readOnly} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Contact</label>
           <div className="space-y-2">
-            <input type="text" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Name" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
-            <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="Email" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
-            <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Phone" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+            <input type="text" value={contactName} onChange={(e) => setContactName(e.target.value)} disabled={readOnly} placeholder="Name" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500" />
+            <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} disabled={readOnly} placeholder="Email" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500" />
+            <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} disabled={readOnly} placeholder="Phone" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500" />
           </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Ship-To Location</label>
-          <select value={shipToLocationId} onChange={(e) => setShipToLocationId(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500">
+          <select value={shipToLocationId} onChange={(e) => setShipToLocationId(e.target.value)} disabled={readOnly} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500">
             <option value="">None</option>
             {shipToLocations.map((loc) => (
               <option key={loc.id} value={loc.id}>
@@ -113,30 +114,34 @@ export default function EquipmentForm({ equipment, users, shipToLocations }: Equ
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Default Technician</label>
-          <select value={defaultTechId} onChange={(e) => setDefaultTechId(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500">
+          <select value={defaultTechId} onChange={(e) => setDefaultTechId(e.target.value)} disabled={readOnly} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-gray-50 disabled:text-gray-500">
             <option value="">None</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="active"
-            checked={active}
-            onChange={(e) => setActive(e.target.checked)}
-            className="rounded border-gray-300"
-          />
-          <label htmlFor="active" className="text-sm text-gray-700">Active</label>
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
-        >
-          {loading ? 'Saving...' : 'Save Changes'}
-        </button>
+        {!readOnly && (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="active"
+                checked={active}
+                onChange={(e) => setActive(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <label htmlFor="active" className="text-sm text-gray-700">Active</label>
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </>
+        )}
       </form>
     </div>
   )

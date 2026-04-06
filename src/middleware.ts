@@ -3,11 +3,15 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // Pages technicians are allowed to access
 const TECH_ALLOWED_PAGES = ['/', '/tickets', '/login']
-const TECH_ALLOWED_PAGE_PATTERNS = [/^\/tickets\/[^/]+$/] // /tickets/[id]
+const TECH_ALLOWED_PAGE_PATTERNS = [
+  /^\/tickets\/[^/]+$/,    // /tickets/[id]
+  /^\/equipment\/[^/]+$/,  // /equipment/[id] — read-only for techs
+]
 
 // API routes technicians are allowed to access
 const TECH_ALLOWED_API_PATTERNS = [
-  /^\/api\/tickets\/[^/]+/, // PATCH /api/tickets/[id] and POST /api/tickets/[id]/complete
+  /^\/api\/tickets\/[^/]+/,           // PATCH /api/tickets/[id] and POST /api/tickets/[id]/complete
+  /^\/api\/equipment\/[^/]+\/notes$/, // GET + POST /api/equipment/[id]/notes
 ]
 
 function isTechAllowed(pathname: string): boolean {
