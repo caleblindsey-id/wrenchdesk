@@ -17,6 +17,8 @@ interface CompleteTicketBody {
   billingContactName?: string
   billingContactEmail?: string
   billingContactPhone?: string
+  additionalPartsUsed?: PartUsed[]
+  additionalHoursWorked?: number
 }
 
 export async function POST(
@@ -27,7 +29,7 @@ export async function POST(
     const { id } = await params
     const body = await request.json() as CompleteTicketBody
 
-    const { completedDate, hoursWorked, partsUsed, completionNotes, billingAmount, customerSignature, customerSignatureName, photos, poNumber, billingContactName, billingContactEmail, billingContactPhone } = body
+    const { completedDate, hoursWorked, partsUsed, completionNotes, billingAmount, customerSignature, customerSignatureName, photos, poNumber, billingContactName, billingContactEmail, billingContactPhone, additionalPartsUsed, additionalHoursWorked } = body
 
     if (!completedDate || hoursWorked === undefined || billingAmount === undefined) {
       return NextResponse.json(
@@ -72,28 +74,40 @@ export async function POST(
       )
     }
 
-    // When a tech completes, auto-set billing amount from flat rate and zero out part prices
+    // Process parts and compute billing amount
     let finalBillingAmount = billingAmount
     let finalParts = partsUsed ?? []
+    let finalAdditionalParts = additionalPartsUsed ?? []
+    const finalAdditionalHours = additionalHoursWorked ?? 0
+
+    // PM parts always have unit_price zeroed (inventory tracking only)
+    finalParts = finalParts.map(p => ({ ...p, unit_price: 0 }))
+
+    // Fetch schedule for flat rate and labor rate from settings
+    const { data: ticketWithSchedule } = await supabase
+      .from('pm_tickets')
+      .select('pm_schedules(flat_rate, billing_type)')
+      .eq('id', id)
+      .single()
+
+    const schedule = ticketWithSchedule?.pm_schedules as { flat_rate: number | null; billing_type: string | null } | null
+    const flatRate = (schedule?.billing_type === 'flat_rate' && schedule.flat_rate != null) ? schedule.flat_rate : 0
 
     if (isTechnician(user.role)) {
-      // Zero out part prices — techs add parts for inventory tracking only
-      finalParts = finalParts.map(p => ({ ...p, unit_price: 0 }))
-
-      // Set billing amount to flat rate from schedule
-      const { data: ticketWithSchedule } = await supabase
-        .from('pm_tickets')
-        .select('pm_schedules(flat_rate, billing_type)')
-        .eq('id', id)
+      // Techs: additional parts keep their prices (visible to techs), server computes billing
+      const { data: settings } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'labor_rate_per_hour')
         .single()
+      const laborRate = settings ? parseFloat(settings.value) : 75
 
-      const schedule = ticketWithSchedule?.pm_schedules as { flat_rate: number | null; billing_type: string | null } | null
-      if (schedule?.billing_type === 'flat_rate' && schedule.flat_rate != null) {
-        finalBillingAmount = schedule.flat_rate
-      } else {
-        finalBillingAmount = 0
-      }
+      const additionalPartsTotal = finalAdditionalParts.reduce(
+        (sum, p) => sum + (p.quantity * p.unit_price), 0
+      )
+      finalBillingAmount = flatRate + (finalAdditionalHours * laborRate) + additionalPartsTotal
     }
+    // Managers: billing amount passed as-is from client
 
     const updated = await completeTicket(id, {
       completedDate,
@@ -108,6 +122,8 @@ export async function POST(
       billingContactName: billingContactName ?? null,
       billingContactEmail: billingContactEmail ?? null,
       billingContactPhone: billingContactPhone ?? null,
+      additionalPartsUsed: finalAdditionalParts,
+      additionalHoursWorked: finalAdditionalHours,
     })
 
     return NextResponse.json(updated)

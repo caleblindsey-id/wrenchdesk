@@ -19,6 +19,8 @@ const ALLOWED_FIELDS = [
   'billing_contact_name',
   'billing_contact_email',
   'billing_contact_phone',
+  'additional_parts_used',
+  'additional_hours_worked',
 ] as const
 
 // Techs can update status + draft completion fields (save progress)
@@ -33,6 +35,8 @@ const TECH_ALLOWED_FIELDS = [
   'billing_contact_name',
   'billing_contact_email',
   'billing_contact_phone',
+  'additional_parts_used',
+  'additional_hours_worked',
 ] as const
 
 type AllowedUpdate = Pick<PmTicketRow, typeof ALLOWED_FIELDS[number]>
@@ -125,6 +129,8 @@ export async function PATCH(
               customer_signature: null,
               customer_signature_name: null,
               photos: [],
+              additional_parts_used: [],
+              additional_hours_worked: null,
             }
           : { status: 'unassigned' as const }
         const updated = await updateTicket(id, updateData as any)
@@ -149,6 +155,8 @@ export async function PATCH(
           customer_signature: null,
           customer_signature_name: null,
           photos: [],
+          additional_parts_used: [],
+          additional_hours_worked: null,
         }
 
         let updateData: Record<string, unknown> = { status: nextStatus }
@@ -212,19 +220,6 @@ export async function DELETE(
 
     if (fetchError || !ticket) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
-    }
-
-    // Block deletion if ticket has child service requests
-    const { count } = await supabase
-      .from('pm_tickets')
-      .select('id', { count: 'exact', head: true })
-      .eq('parent_ticket_id', id)
-
-    if (count && count > 0) {
-      return NextResponse.json(
-        { error: 'Delete linked service requests first' },
-        { status: 409 }
-      )
     }
 
     // Clean up photos from Supabase Storage

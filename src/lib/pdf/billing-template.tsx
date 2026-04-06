@@ -31,6 +31,9 @@ interface BillingTicket {
   hoursWorked: number | null
   completionNotes: string | null
   partsUsed: PartLine[]
+  additionalPartsUsed: PartLine[]
+  additionalHoursWorked: number | null
+  laborRate: number
   billingAmount: number | null
   billingType: string | null
   flatRate: number | null
@@ -279,10 +282,12 @@ function dash(value: string | null | undefined): string {
 
 function TicketSection({ ticket }: { ticket: BillingTicket }) {
   const isFlatRate = ticket.billingType === 'flat_rate' && ticket.flatRate != null
-  const partsTotal = ticket.partsUsed.reduce(
-    (sum, p) => sum + p.quantity * p.unit_price,
-    0
+  const pmSubtotal = isFlatRate ? ticket.flatRate! : 0
+  const additionalPartsTotal = ticket.additionalPartsUsed.reduce(
+    (sum, p) => sum + p.quantity * p.unit_price, 0
   )
+  const additionalLaborTotal = (ticket.additionalHoursWorked ?? 0) * ticket.laborRate
+  const additionalSubtotal = additionalLaborTotal + additionalPartsTotal
 
   const equipmentLine = [ticket.equipmentMake, ticket.equipmentModel]
     .filter(Boolean)
@@ -390,74 +395,83 @@ function TicketSection({ ticket }: { ticket: BillingTicket }) {
         </View>
       )}
 
-      {/* PARTS & MATERIALS */}
-      <Text style={styles.sectionLabel}>
-        {isFlatRate ? 'Additional Parts & Materials' : 'Parts & Materials'}
-      </Text>
+      {/* PM SERVICE — COVERED UNDER AGREEMENT */}
+      <Text style={styles.sectionLabel}>PM Service — Covered Under Agreement</Text>
       <View style={styles.table}>
         <View style={styles.tableHeaderRow}>
           <Text style={[styles.colProductNum, styles.tableHeaderText]}>Product #</Text>
           <Text style={[styles.colDescription, styles.tableHeaderText]}>Description</Text>
           <Text style={[styles.colQty, styles.tableHeaderText]}>Qty</Text>
-          <Text style={[styles.colUnitPrice, styles.tableHeaderText]}>Unit Price</Text>
-          <Text style={[styles.colTotal, styles.tableHeaderText]}>Total</Text>
         </View>
         {ticket.partsUsed.length === 0 ? (
-          <Text style={styles.noPartsText}>
-            {isFlatRate ? 'No additional parts' : 'No parts used'}
-          </Text>
+          <Text style={styles.noPartsText}>No PM parts</Text>
         ) : (
           ticket.partsUsed.map((part, idx) => (
             <View key={idx} style={styles.tableRow}>
               <Text style={styles.colProductNum}>{part.productNumber ?? '—'}</Text>
               <Text style={styles.colDescription}>{dash(part.description)}</Text>
               <Text style={styles.colQty}>{part.quantity}</Text>
-              <Text style={styles.colUnitPrice}>{fmt(part.unit_price)}</Text>
-              <Text style={styles.colTotal}>{fmt(part.quantity * part.unit_price)}</Text>
             </View>
           ))
         )}
       </View>
+      {isFlatRate && (
+        <View style={[styles.summaryRow, { marginTop: 4 }]}>
+          <Text style={styles.summaryLabel}>PM Service (Flat Rate):</Text>
+          <Text style={styles.summaryValue}>{fmt(pmSubtotal)}</Text>
+        </View>
+      )}
 
-      {/* BILLING SUMMARY */}
-      <View style={styles.summaryBlock}>
-        {isFlatRate ? (
-          <>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>PM Service (Flat Rate):</Text>
-              <Text style={styles.summaryValue}>{fmt(ticket.flatRate!)}</Text>
+      {/* ADDITIONAL WORK — NOT COVERED UNDER AGREEMENT */}
+      {(ticket.additionalPartsUsed.length > 0 || (ticket.additionalHoursWorked ?? 0) > 0) && (
+        <View>
+          <Text style={styles.sectionLabel}>Additional Work — Not Covered Under Agreement</Text>
+          {(ticket.additionalHoursWorked ?? 0) > 0 && (
+            <View style={[styles.summaryRow, { marginBottom: 4 }]}>
+              <Text style={styles.summaryLabel}>
+                Labor ({ticket.additionalHoursWorked} hrs @ {fmt(ticket.laborRate)}/hr):
+              </Text>
+              <Text style={styles.summaryValue}>{fmt(additionalLaborTotal)}</Text>
             </View>
-            {partsTotal > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Additional Parts:</Text>
-                <Text style={styles.summaryValue}>{fmt(partsTotal)}</Text>
+          )}
+          {ticket.additionalPartsUsed.length > 0 && (
+            <View style={styles.table}>
+              <View style={styles.tableHeaderRow}>
+                <Text style={[styles.colProductNum, styles.tableHeaderText]}>Product #</Text>
+                <Text style={[styles.colDescription, styles.tableHeaderText]}>Description</Text>
+                <Text style={[styles.colQty, styles.tableHeaderText]}>Qty</Text>
+                <Text style={[styles.colUnitPrice, styles.tableHeaderText]}>Unit Price</Text>
+                <Text style={[styles.colTotal, styles.tableHeaderText]}>Total</Text>
               </View>
-            )}
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>
-                Additional Labor ({ticket.hoursWorked != null ? `${ticket.hoursWorked} hrs` : '—'}):
-              </Text>
-              <Text style={styles.summaryValue}>—</Text>
+              {ticket.additionalPartsUsed.map((part, idx) => (
+                <View key={idx} style={styles.tableRow}>
+                  <Text style={styles.colProductNum}>{part.productNumber ?? '—'}</Text>
+                  <Text style={styles.colDescription}>{dash(part.description)}</Text>
+                  <Text style={styles.colQty}>{part.quantity}</Text>
+                  <Text style={styles.colUnitPrice}>{fmt(part.unit_price)}</Text>
+                  <Text style={styles.colTotal}>{fmt(part.quantity * part.unit_price)}</Text>
+                </View>
+              ))}
             </View>
-          </>
-        ) : (
-          <>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>
-                Labor ({ticket.hoursWorked != null ? `${ticket.hoursWorked} hrs` : '—'}):
-              </Text>
-              <Text style={styles.summaryValue}>—</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Parts Total:</Text>
-              <Text style={styles.summaryValue}>{fmt(partsTotal)}</Text>
-            </View>
-          </>
-        )}
+          )}
+          <View style={[styles.summaryRow, { marginTop: 4 }]}>
+            <Text style={styles.summaryLabel}>Additional Work Subtotal:</Text>
+            <Text style={styles.summaryValue}>{fmt(additionalSubtotal)}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* GRAND TOTAL */}
+      <View style={styles.summaryBlock}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>TOTAL AMOUNT DUE:</Text>
           <Text style={styles.totalValue}>
             {ticket.billingAmount != null ? fmt(ticket.billingAmount) : '—'}
+          </Text>
+        </View>
+        <View style={[styles.summaryRow, { marginTop: 2 }]}>
+          <Text style={[styles.summaryLabel, { fontSize: 7, color: '#888888', fontStyle: 'italic' }]}>
+            Taxes not included
           </Text>
         </View>
       </View>

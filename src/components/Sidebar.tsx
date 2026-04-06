@@ -12,7 +12,6 @@ import {
   Settings,
   LogOut,
   UserRoundSearch,
-  ClipboardPlus,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/components/UserProvider'
@@ -20,7 +19,6 @@ import { useUser } from '@/components/UserProvider'
 const allNavItems = [
   { label: 'Dashboard', icon: LayoutDashboard, route: '/' },
   { label: 'Tickets', icon: ClipboardList, route: '/tickets' },
-  { label: 'Service Requests', icon: ClipboardPlus, route: '/service-requests' },
   { label: 'Equipment', icon: Wrench, route: '/equipment' },
   { label: 'Customers', icon: Building2, route: '/customers' },
   { label: 'Prospects', icon: UserRoundSearch, route: '/prospects' },

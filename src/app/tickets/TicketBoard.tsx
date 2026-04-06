@@ -47,7 +47,6 @@ export default function TicketBoard({
   const [year, setYear] = useState(currentYear)
   const [techFilter, setTechFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [assignTo, setAssignTo] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
@@ -62,7 +61,6 @@ export default function TicketBoard({
     params.set('year', year.toString())
     if (techFilter) params.set('tech', techFilter)
     if (statusFilter) params.set('status', statusFilter)
-    if (typeFilter) params.set('type', typeFilter)
     router.push(`/tickets?${params.toString()}`)
   }
 
@@ -208,18 +206,6 @@ export default function TicketBoard({
               ))}
             </select>
           </div>
-          <div className="w-full lg:w-auto">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full lg:w-auto rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500"
-            >
-              <option value="">All Types</option>
-              <option value="pm">PM</option>
-              <option value="service_request">Service Request</option>
-            </select>
-          </div>
           <button
             onClick={applyFilters}
             className="w-full lg:w-auto px-4 py-2.5 lg:py-1.5 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors min-h-[44px] lg:min-h-0"
@@ -311,9 +297,6 @@ export default function TicketBoard({
                     <div className="flex items-center gap-1 min-w-0">
                       <span className="text-sm font-medium text-gray-900 truncate">
                         {ticket.customers?.name ?? '—'}
-                        {ticket.ticket_type === 'service_request' && (
-                          <span className="text-xs text-orange-600 ml-1">(SR)</span>
-                        )}
                       </span>
                       <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
                     </div>
@@ -389,9 +372,6 @@ export default function TicketBoard({
                       </td>
                       <td className="px-4 py-3 text-gray-900">
                         {ticket.customers?.name ?? '—'}
-                        {ticket.ticket_type === 'service_request' && (
-                          <span className="text-xs text-orange-600 ml-1">(SR)</span>
-                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {[ticket.equipment?.make, ticket.equipment?.model]

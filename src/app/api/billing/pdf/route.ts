@@ -37,6 +37,9 @@ interface BillingTicket {
   hoursWorked: number | null
   completionNotes: string | null
   partsUsed: PartLine[]
+  additionalPartsUsed: PartLine[]
+  additionalHoursWorked: number | null
+  laborRate: number
   billingAmount: number | null
   billingType: string | null
   flatRate: number | null
@@ -64,6 +67,13 @@ interface RawTicket {
     description?: string
     unit_price: number
   }> | null
+  additional_parts_used: Array<{
+    synergy_product_id?: number
+    quantity: number
+    description?: string
+    unit_price: number
+  }> | null
+  additional_hours_worked: number | null
   billing_amount: number | null
   customers: {
     name: string
@@ -172,6 +182,8 @@ export async function POST(request: NextRequest) {
         hours_worked,
         completion_notes,
         parts_used,
+        additional_parts_used,
+        additional_hours_worked,
         billing_amount,
         customer_signature,
         customer_signature_name,
@@ -199,7 +211,7 @@ export async function POST(request: NextRequest) {
     // --- Collect all unique synergy_product_ids to resolve descriptions ---
     const productIdSet = new Set<number>()
     for (const ticket of rawTickets as RawTicket[]) {
-      for (const part of ticket.parts_used ?? []) {
+      for (const part of [...(ticket.parts_used ?? []), ...(ticket.additional_parts_used ?? [])]) {
         if (typeof part.synergy_product_id === 'number') {
           productIdSet.add(part.synergy_product_id)
         }
@@ -240,6 +252,14 @@ export async function POST(request: NextRequest) {
       }
       photoUrlMap.set(raw.id, urls)
     }
+
+    // --- Fetch labor rate from settings ---
+    const { data: laborRateSetting } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'labor_rate_per_hour')
+      .single()
+    const laborRate = laborRateSetting ? parseFloat(laborRateSetting.value) : 75
 
     // --- Map raw tickets to BillingTicket[] ---
     const tickets: BillingTicket[] = (rawTickets as RawTicket[]).map((raw) => {
@@ -299,6 +319,20 @@ export async function POST(request: NextRequest) {
         hoursWorked: raw.hours_worked,
         completionNotes: raw.completion_notes,
         partsUsed,
+        additionalPartsUsed: (raw.additional_parts_used ?? []).map((part) => ({
+          productNumber:
+            (typeof part.synergy_product_id === 'number' &&
+              productNumMap.get(part.synergy_product_id)) || null,
+          description:
+            (typeof part.synergy_product_id === 'number' &&
+              productDescMap.get(part.synergy_product_id)) ||
+            part.description ||
+            'Unknown part',
+          quantity: part.quantity,
+          unit_price: part.unit_price,
+        })),
+        additionalHoursWorked: raw.additional_hours_worked,
+        laborRate,
         billingAmount: raw.billing_amount,
         billingType: raw.pm_schedules?.billing_type ?? null,
         flatRate: raw.pm_schedules?.flat_rate ?? null,
