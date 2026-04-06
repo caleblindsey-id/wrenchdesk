@@ -58,7 +58,7 @@ export default async function EquipmentDetailPage({
         </div>
       </div>
 
-      <EquipmentForm equipment={equipment} users={users} shipToLocations={shipToLocations ?? []} readOnly={isTech} />
+      <EquipmentForm equipment={equipment} users={users} shipToLocations={shipToLocations ?? []} isTech={isTech} />
 
       {!isTech && (
         <ScheduleSection
