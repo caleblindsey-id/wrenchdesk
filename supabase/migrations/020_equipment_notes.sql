@@ -18,6 +18,16 @@ CREATE POLICY "Authenticated insert equipment_notes"
   ON equipment_notes FOR INSERT TO authenticated
   WITH CHECK (true);
 
+-- Helper: get equipment IDs for the current tech (SECURITY DEFINER to bypass RLS,
+-- avoiding infinite recursion when used in a policy on pm_tickets)
+CREATE OR REPLACE FUNCTION get_tech_equipment_ids()
+RETURNS SETOF UUID AS $$
+  SELECT DISTINCT equipment_id
+  FROM pm_tickets
+  WHERE assigned_technician_id = auth.uid()
+    AND equipment_id IS NOT NULL;
+$$ LANGUAGE sql SECURITY DEFINER;
+
 -- Allow techs to read completed/billed tickets for equipment they've been assigned
 -- (needed for service history — default RLS only lets techs see their own assigned tickets)
 CREATE POLICY "Technicians read completed tickets for shared equipment"
@@ -25,7 +35,5 @@ CREATE POLICY "Technicians read completed tickets for shared equipment"
   USING (
     get_user_role() = 'technician'
     AND status IN ('completed', 'billed')
-    AND equipment_id IN (
-      SELECT equipment_id FROM pm_tickets WHERE assigned_technician_id = auth.uid()
-    )
+    AND equipment_id IN (SELECT get_tech_equipment_ids())
   );
