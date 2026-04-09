@@ -302,11 +302,23 @@ function AddUserModal({
   onClose: () => void
   onCreated: () => void
 }) {
+  const TEMP_PASSWORD = 'ChangeMeNow1!'
+
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<UserRole>('technician')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [createdEmail, setCreatedEmail] = useState<string | null>(null)
+
+  function handleClose() {
+    setName('')
+    setEmail('')
+    setRole('technician')
+    setError(null)
+    setCreatedEmail(null)
+    onClose()
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -326,6 +338,7 @@ function AddUserModal({
       return
     }
 
+    setCreatedEmail(email)
     setName('')
     setEmail('')
     setRole('technician')
@@ -337,67 +350,99 @@ function AddUserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
       <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-6 max-w-md w-full mx-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-gray-900 dark:text-white">Add User</h3>
-          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600">
+          <button onClick={handleClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
+        {createdEmail ? (
+          <div className="space-y-4">
+            <p className="text-sm text-green-700 dark:text-green-400 font-medium">User created successfully.</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Share these credentials with <span className="font-medium text-gray-900 dark:text-white">{createdEmail}</span>:
+            </p>
+            <div className="rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-4 py-3 space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Email</span>
+                <span className="font-mono text-gray-900 dark:text-white">{createdEmail}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Temp password</span>
+                <span className="font-mono text-gray-900 dark:text-white">{TEMP_PASSWORD}</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              They will be prompted to set a new password on first login.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-slate-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-slate-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
-            >
-              <option value="technician">Technician</option>
-              <option value="coordinator">Coordinator</option>
-              <option value="manager">Manager</option>
-            </select>
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Adding...' : 'Add User'}
-            </button>
-          </div>
-        </form>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as UserRole)}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                >
+                  <option value="technician">Technician</option>
+                  <option value="coordinator">Coordinator</option>
+                  <option value="manager">Manager</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                >
+                  {loading ? 'Adding...' : 'Add User'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </div>
   )
