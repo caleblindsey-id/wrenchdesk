@@ -22,6 +22,7 @@ interface WorkOrderTicket {
   equipmentContactName: string | null
   equipmentContactEmail: string | null
   equipmentContactPhone: string | null
+  poNumber: string | null
   technicianName: string
   completedDate: string
   hoursWorked: number | null
@@ -216,6 +217,12 @@ export function CustomerWorkOrderDocument({ ticket, logoBase64 }: WorkOrderDocum
           <Text style={styles.fieldLabel}>Work Order #:</Text>
           <Text style={[styles.fieldValue, { fontFamily: 'Helvetica-Bold' }]}>WO-{ticket.workOrderNumber}</Text>
         </View>
+        {ticket.poNumber && (
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>PO Number:</Text>
+            <Text style={[styles.fieldValue, { fontFamily: 'Helvetica-Bold' }]}>{ticket.poNumber}</Text>
+          </View>
+        )}
 
         {/* Customer */}
         <Text style={styles.sectionLabel}>Customer</Text>

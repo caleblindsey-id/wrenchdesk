@@ -21,7 +21,7 @@ function isTechAllowed(pathname: string): boolean {
   return false
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   // Skip auth check for public routes
@@ -80,8 +80,8 @@ export async function middleware(request: NextRequest) {
       role = userData.role
       mustChangePwFromCookie = userData.must_change_password ? 'true' : 'false'
       const cookieOpts = { httpOnly: true, sameSite: 'strict' as const, path: '/' }
-      supabaseResponse.cookies.set('pm-role', role, cookieOpts)
-      supabaseResponse.cookies.set('pm-must-change-pw', mustChangePwFromCookie, cookieOpts)
+      supabaseResponse.cookies.set('pm-role', role!, cookieOpts)
+      supabaseResponse.cookies.set('pm-must-change-pw', mustChangePwFromCookie!, cookieOpts)
     }
   }
 

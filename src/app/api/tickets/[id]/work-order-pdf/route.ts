@@ -29,6 +29,7 @@ export async function POST(
       .select(`
         id,
         work_order_number,
+        po_number,
         status,
         completed_date,
         hours_worked,
@@ -148,6 +149,7 @@ export async function POST(
 
     const ticket = {
       workOrderNumber: raw.work_order_number as number,
+      poNumber: raw.po_number as string | null,
       customerName: customer?.name ?? '—',
       accountNumber: customer?.account_number ?? null,
       serviceLocation,
