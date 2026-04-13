@@ -116,6 +116,15 @@ function toPartUsed(entries: PartEntry[]): PartUsed[] {
   }))
 }
 
+const FORCE_TRANSITIONS: Record<string, string[]> = {
+  unassigned: ['assigned', 'in_progress', 'skipped'],
+  assigned:   ['in_progress', 'unassigned', 'skipped'],
+  in_progress: ['assigned', 'unassigned'],
+  completed:  ['billed', 'in_progress'],
+  billed:     ['completed', 'in_progress', 'assigned', 'unassigned'],
+  skipped:    ['unassigned'],
+}
+
 export default function TicketActions({ ticket, userRole, userId, laborRate }: TicketActionsProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -180,6 +189,10 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
   )
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Auto-save debounce
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasInitialized = useRef(false)
 
   // Load preview URLs for existing photos
   useEffect(() => {
@@ -425,7 +438,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     }
   }
 
-  async function handleSaveProgress() {
+  async function saveProgress() {
     setSaving(true)
     setError(null)
     setSaveSuccess(false)
@@ -459,6 +472,28 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
       setSaving(false)
     }
   }
+
+  function handleSaveProgress() {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    saveProgress()
+  }
+
+  // Auto-save: debounce 3 seconds after any form field change
+  useEffect(() => {
+    if (ticket.status !== 'in_progress') return
+    if (!hasInitialized.current) {
+      hasInitialized.current = true
+      return
+    }
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => {
+      saveProgress()
+    }, 3000)
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedDate, hoursWorked, completionNotes, pmParts, additionalParts, additionalHoursWorked, poNumber, billingContactName, billingContactEmail, billingContactPhone, photos])
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
@@ -591,6 +626,50 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
       setLoading(false)
     }
   }
+
+  async function handleForceStatus(targetStatus: string) {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: targetStatus }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update status')
+      }
+      router.push(pathname)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const superAdminOverride = userRole === 'super_admin' ? (
+    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Super Admin: Force Status</p>
+      <div className="flex flex-wrap gap-2">
+        {(FORCE_TRANSITIONS[ticket.status] ?? []).map((target) => (
+          <button
+            key={target}
+            type="button"
+            onClick={() => {
+              if (confirm(`Force ticket status to "${target.replace(/_/g, ' ')}"? This may clear completion data.`)) {
+                handleForceStatus(target)
+              }
+            }}
+            disabled={loading}
+            className="px-3 py-2 text-xs font-medium text-red-700 bg-white border border-red-300 rounded-md hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            → {target.replace(/_/g, ' ')}
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null
 
   const deleteButton = (userRole === 'super_admin' || userRole === 'manager') ? (
     <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -752,6 +831,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
         >
           {loading ? 'Starting...' : 'Start Work'}
         </button>
+        {superAdminOverride}
         {deleteButton}
       </div>
     )
@@ -1056,6 +1136,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
               </div>
             </div>
           )}
+          {superAdminOverride}
         </div>
         {deleteButton}
       </>
@@ -1085,6 +1166,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             </button>
           </div>
         )}
+        {superAdminOverride}
         {deleteButton}
       </div>
     )
@@ -1309,6 +1391,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           </div>
         </div>
       )}
+      {superAdminOverride}
       {deleteButton}
     </div>
   )
