@@ -187,8 +187,9 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Billing
+  // Billing / Synergy
   const [synergyOrderNumber, setSynergyOrderNumber] = useState(ticket.synergy_order_number ?? '')
+  const [synergyPoNumber, setSynergyPoNumber] = useState(ticket.synergy_po_number ?? '')
   const [diagnosticCharge, setDiagnosticCharge] = useState(
     ticket.diagnostic_charge != null ? String(ticket.diagnostic_charge) : ''
   )
@@ -469,6 +470,8 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
         synergy_order_number: synergyOrder || null,
         synergy_po_number: synergyPo || null,
       })
+      setSynergyOrderNumber(synergyOrder)
+      setSynergyPoNumber(synergyPo)
     })
   }
 
@@ -870,11 +873,12 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
                         <span className={`text-xs font-medium uppercase ${statusColors[part.status] ?? ''}`}>
                           {part.status}
                         </span>
-                        {/* Staff can advance part status */}
+                        {/* Staff can advance part status — order# required to mark ordered */}
                         {isStaff && part.status === 'requested' && (
                           <button
                             onClick={() => handleUpdatePartStatus(i, 'ordered')}
-                            disabled={loading}
+                            disabled={loading || !synergyOrderNumber.trim()}
+                            title={!synergyOrderNumber.trim() ? 'Enter Synergy Order # below first' : undefined}
                             className="px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 min-h-[44px] sm:min-h-0"
                           >
                             Mark Ordered
@@ -883,7 +887,7 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
                         {isStaff && part.status === 'ordered' && (
                           <button
                             onClick={() => handleUpdatePartStatus(i, 'received')}
-                            disabled={loading}
+                            disabled={loading || !synergyOrderNumber.trim()}
                             className="px-2 py-1 text-xs font-medium text-green-600 dark:text-green-400 border border-green-300 dark:border-green-600 rounded hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 min-h-[44px] sm:min-h-0"
                           >
                             Mark Received
