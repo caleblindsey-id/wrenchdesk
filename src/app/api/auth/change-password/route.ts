@@ -1,0 +1,50 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { cookies } from 'next/headers'
+
+export async function POST(request: NextRequest) {
+  try {
+    const { password } = await request.json() as { password: string }
+    if (!password || password.length < 8) {
+      return NextResponse.json({ error: 'Password must be at least 8 characters.' }, { status: 400 })
+    }
+
+    const supabase = await createClient()
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Session expired. Please log in again.' }, { status: 401 })
+    }
+
+    // Update password via the user's own session (validates they're actually logged in)
+    const { error: updateError } = await supabase.auth.updateUser({ password })
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 400 })
+    }
+
+    // Clear the must_change_password flag using admin client (bypasses RLS)
+    const admin = createAdminClient()
+    const { error: dbError } = await admin
+      .from('users')
+      .update({ must_change_password: false })
+      .eq('id', user.id)
+
+    if (dbError) {
+      console.error('Failed to clear must_change_password:', dbError)
+      return NextResponse.json({ error: 'Password updated but failed to clear change flag. Please contact an administrator.' }, { status: 500 })
+    }
+
+    // Clear the proxy cookie so the user isn't redirected back
+    const cookieStore = await cookies()
+    cookieStore.set('pm-must-change-pw', 'false', {
+      httpOnly: true,
+      sameSite: 'strict',
+      path: '/',
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('POST /api/auth/change-password error:', err)
+    return NextResponse.json({ error: 'Failed to change password.' }, { status: 500 })
+  }
+}

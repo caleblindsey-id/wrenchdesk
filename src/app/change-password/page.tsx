@@ -2,7 +2,6 @@
 
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { Wrench } from 'lucide-react'
 
 function ChangePasswordForm() {
@@ -29,30 +28,28 @@ function ChangePasswordForm() {
     }
 
     setLoading(true)
-    const supabase = createClient()
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      setError('Session expired. Please log in again.')
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'Failed to change password.')
+        setLoading(false)
+        return
+      }
+
+      router.push('/')
+      router.refresh()
+    } catch {
+      setError('Failed to change password. Please try again.')
       setLoading(false)
-      return
     }
-
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
-    if (updateError) {
-      setError(updateError.message)
-      setLoading(false)
-      return
-    }
-
-    // Clear the must_change_password flag
-    await supabase
-      .from('users')
-      .update({ must_change_password: false })
-      .eq('id', user.id)
-
-    router.push('/')
-    router.refresh()
   }
 
   return (
