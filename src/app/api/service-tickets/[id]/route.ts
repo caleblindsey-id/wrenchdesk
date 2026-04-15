@@ -43,6 +43,7 @@ const STAFF_ALLOWED_FIELDS = [
   'diagnostic_charge',
   'awaiting_pickup',
   'picked_up_at',
+  'generate_approval_token',
 ] as const
 
 // Fields techs can update
@@ -215,6 +216,11 @@ export async function PATCH(
           estimate_approved_at: null,
           auto_approved: false,
           diagnosis_notes: null,
+          estimate_signature: null,
+          estimate_signature_name: null,
+          approval_token: null,
+          approval_token_expires_at: null,
+          // Note: decline_reason is intentionally preserved for reference
         })
       }
     }
@@ -249,6 +255,21 @@ export async function PATCH(
         filtered.estimate_approved_at = new Date().toISOString()
         filtered.auto_approved = true
       }
+    }
+
+    // --- Generate approval token (for Email Estimate / Resend) ---
+    if (filtered.generate_approval_token) {
+      if (current.status !== 'estimated') {
+        return NextResponse.json(
+          { error: 'Can only generate approval tokens for estimated tickets' },
+          { status: 409 }
+        )
+      }
+      delete filtered.generate_approval_token  // not a real DB column
+      filtered.approval_token = crypto.randomUUID()
+      filtered.approval_token_expires_at = new Date(
+        Date.now() + 7 * 24 * 60 * 60 * 1000
+      ).toISOString()
     }
 
     // --- Reset validation when order number changes ---
