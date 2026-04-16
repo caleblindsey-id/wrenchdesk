@@ -6,6 +6,7 @@ import { TicketDetail } from '@/lib/db/tickets'
 import { PartUsed, TicketPhoto, UserRole } from '@/types/database'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/image-utils'
+import { formatPhoneNumber } from '@/lib/phone'
 import SignaturePad from '@/components/SignaturePad'
 import SkipDialog from '../SkipDialog'
 
@@ -1181,9 +1182,9 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                 <input
                   type="tel"
                   value={billingContactPhone}
-                  onChange={(e) => setBillingContactPhone(e.target.value)}
+                  onChange={(e) => setBillingContactPhone(formatPhoneNumber(e.target.value))}
                   className="rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-500 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
-                  placeholder="Phone"
+                  placeholder="(205) 555-1234"
                 />
               </div>
             </div>

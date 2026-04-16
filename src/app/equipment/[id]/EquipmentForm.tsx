@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { EquipmentRow, UserRow } from '@/types/database'
+import { formatPhoneNumber } from '@/lib/phone'
 
 interface EquipmentFormProps {
   equipment: EquipmentRow & { customers: { name: string } | null }
@@ -105,7 +106,7 @@ export default function EquipmentForm({ equipment, users, shipToLocations, isTec
           <div className="space-y-2">
             <input type="text" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Name" className="w-full rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
             <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="Email" className="w-full rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
-            <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Phone" className="w-full rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
+            <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(formatPhoneNumber(e.target.value))} placeholder="(205) 555-1234" className="w-full rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-slate-500" />
           </div>
         </div>
         <div>

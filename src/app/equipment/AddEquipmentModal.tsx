@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { BillingType, DefaultProduct } from '@/types/database'
+import { formatPhoneNumber } from '@/lib/phone'
 import { X, Plus, Minus, Trash2 } from 'lucide-react'
 
 interface CustomerOption {
@@ -495,8 +496,8 @@ export default function AddEquipmentModal({
               <input
                 type="tel"
                 value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-                placeholder="Phone"
+                onChange={(e) => setContactPhone(formatPhoneNumber(e.target.value))}
+                placeholder="(205) 555-1234"
                 className={inputClasses}
               />
             </div>

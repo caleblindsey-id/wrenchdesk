@@ -311,6 +311,9 @@ export default function BillingExport({
                           {t.billing_amount != null ? `$${t.billing_amount.toFixed(2)}` : '—'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Terms: {t.customers?.ar_terms ?? '—'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           Completed:{' '}
                           {t.completed_date
                             ? new Date(t.completed_date).toLocaleDateString()
@@ -346,6 +349,7 @@ export default function BillingExport({
                     <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">Technician</th>
                     <th className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-400">Hours</th>
                     <th className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-400">Billing</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">Terms</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">Completed</th>
                   </tr>
                 </thead>
@@ -384,6 +388,9 @@ export default function BillingExport({
                           {t.billing_amount != null
                             ? `$${t.billing_amount.toFixed(2)}`
                             : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                          {t.customers?.ar_terms ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
                           {t.completed_date
