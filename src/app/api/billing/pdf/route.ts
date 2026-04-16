@@ -35,6 +35,8 @@ interface BillingTicket {
   technicianName: string
   completedDate: string
   hoursWorked: number | null
+  machineHours: number | null
+  dateCode: string | null
   completionNotes: string | null
   partsUsed: PartLine[]
   additionalPartsUsed: PartLine[]
@@ -74,6 +76,8 @@ interface RawTicket {
     unit_price: number
   }> | null
   additional_hours_worked: number | null
+  machine_hours: number | null
+  date_code: string | null
   billing_amount: number | null
   customers: {
     name: string
@@ -180,6 +184,8 @@ export async function POST(request: NextRequest) {
         pm_schedule_id,
         completed_date,
         hours_worked,
+        machine_hours,
+        date_code,
         completion_notes,
         parts_used,
         additional_parts_used,
@@ -317,6 +323,8 @@ export async function POST(request: NextRequest) {
             })
           : '—',
         hoursWorked: raw.hours_worked,
+        machineHours: raw.machine_hours,
+        dateCode: raw.date_code,
         completionNotes: raw.completion_notes,
         partsUsed,
         additionalPartsUsed: (raw.additional_parts_used ?? []).map((part) => ({

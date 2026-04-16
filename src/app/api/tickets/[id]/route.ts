@@ -21,6 +21,8 @@ const ALLOWED_FIELDS = [
   'billing_contact_phone',
   'additional_parts_used',
   'additional_hours_worked',
+  'machine_hours',
+  'date_code',
 ] as const
 
 // Techs can update status + draft completion fields (save progress)
@@ -37,6 +39,8 @@ const TECH_ALLOWED_FIELDS = [
   'billing_contact_phone',
   'additional_parts_used',
   'additional_hours_worked',
+  'machine_hours',
+  'date_code',
 ] as const
 
 type AllowedUpdate = Pick<PmTicketRow, typeof ALLOWED_FIELDS[number]>
@@ -131,6 +135,8 @@ export async function PATCH(
               photos: [],
               additional_parts_used: [],
               additional_hours_worked: null,
+              machine_hours: null,
+              date_code: null,
             }
           : { status: 'unassigned' as const }
         const updated = await updateTicket(id, updateData as any)
@@ -157,6 +163,8 @@ export async function PATCH(
           photos: [],
           additional_parts_used: [],
           additional_hours_worked: null,
+          machine_hours: null,
+          date_code: null,
         }
 
         let updateData: Record<string, unknown> = { status: nextStatus }
