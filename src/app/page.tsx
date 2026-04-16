@@ -10,6 +10,7 @@ import {
   SkipForward,
   ChevronRight,
   DollarSign,
+  AlertTriangle,
 } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import SyncStatusBanner from '@/components/SyncStatusBanner'
@@ -27,6 +28,7 @@ const allStatusCards: {
   { status: 'completed', label: 'Completed', icon: CheckCircle, color: 'text-green-500' },
   { status: 'billed', label: 'Billed', icon: Receipt, color: 'text-purple-500' },
   { status: 'skipped', label: 'Skipped', icon: SkipForward, color: 'text-gray-400' },
+  { status: 'skip_requested', label: 'Skip Requested', icon: AlertTriangle, color: 'text-amber-500' },
 ]
 
 // Techs don't see unassigned tickets — they can't act on them
@@ -55,6 +57,7 @@ export default async function DashboardPage() {
     completed: 0,
     billed: 0,
     skipped: 0,
+    skip_requested: 0,
   }
   for (const t of tickets) {
     counts[t.status]++

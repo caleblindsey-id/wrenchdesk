@@ -7,6 +7,7 @@ import { PartUsed, TicketPhoto, UserRole } from '@/types/database'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/image-utils'
 import SignaturePad from '@/components/SignaturePad'
+import SkipDialog from '../SkipDialog'
 
 interface ProductResult {
   id: number
@@ -118,11 +119,12 @@ function toPartUsed(entries: PartEntry[]): PartUsed[] {
 
 const FORCE_TRANSITIONS: Record<string, string[]> = {
   unassigned: ['assigned', 'in_progress', 'skipped'],
-  assigned:   ['in_progress', 'unassigned', 'skipped'],
-  in_progress: ['assigned', 'unassigned'],
+  assigned:   ['in_progress', 'unassigned', 'skipped', 'skip_requested'],
+  in_progress: ['assigned', 'unassigned', 'skip_requested'],
   completed:  ['billed', 'in_progress'],
   billed:     ['completed', 'in_progress', 'assigned', 'unassigned'],
   skipped:    ['unassigned'],
+  skip_requested: ['skipped', 'in_progress', 'assigned'],
 }
 
 export default function TicketActions({ ticket, userRole, userId, laborRate }: TicketActionsProps) {
@@ -182,6 +184,11 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
   const [billingContactPhone, setBillingContactPhone] = useState(ticket.billing_contact_phone ?? '')
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  // Skip request state
+  const [skipRequestOpen, setSkipRequestOpen] = useState(false)
+  const [skipReason, setSkipReason] = useState('')
+  const [skipDialogOpen, setSkipDialogOpen] = useState(false)
 
   // Photo state
   const [photos, setPhotos] = useState<Array<TicketPhoto & { previewUrl?: string }>>(
@@ -627,6 +634,55 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     }
   }
 
+  async function handleRequestSkip() {
+    if (!skipReason.trim()) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'skip_requested',
+          skip_reason: skipReason.trim(),
+          skip_previous_status: ticket.status,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to request skip')
+      }
+      setSkipRequestOpen(false)
+      router.push(pathname)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleDenySkip() {
+    const revertTo = ticket.skip_previous_status || 'assigned'
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/tickets/${ticket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: revertTo }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to deny skip request')
+      }
+      router.push(pathname)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleForceStatus(targetStatus: string) {
     setLoading(true)
     setError(null)
@@ -824,13 +880,56 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           Actions
         </h2>
         {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-        <button
-          onClick={handleStart}
-          disabled={loading}
-          className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors min-h-[44px]"
-        >
-          {loading ? 'Starting...' : 'Start Work'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleStart}
+            disabled={loading}
+            className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors min-h-[44px]"
+          >
+            {loading ? 'Starting...' : 'Start Work'}
+          </button>
+          {isTech && (
+            <button
+              type="button"
+              onClick={() => setSkipRequestOpen(true)}
+              disabled={loading}
+              className="px-4 py-3 sm:py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
+            >
+              Request Skip
+            </button>
+          )}
+        </div>
+        {skipRequestOpen && (
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Why should this PM be skipped?
+            </label>
+            <textarea
+              value={skipReason}
+              onChange={(e) => setSkipReason(e.target.value)}
+              placeholder="e.g., Customer requested to reschedule, machine is down..."
+              rows={3}
+              className="w-full rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleRequestSkip}
+                disabled={loading || !skipReason.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                {loading ? 'Submitting...' : 'Submit Skip Request'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSkipRequestOpen(false); setSkipReason('') }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
         {superAdminOverride}
         {deleteButton}
       </div>
@@ -1091,7 +1190,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
               }}
             />
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={handleSaveProgress}
@@ -1107,10 +1206,53 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
               >
                 {loading ? 'Completing...' : 'Mark Complete'}
               </button>
+              {isTech && (
+                <button
+                  type="button"
+                  onClick={() => setSkipRequestOpen(true)}
+                  disabled={loading || saving}
+                  className="px-4 py-3 sm:py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
+                >
+                  Request Skip
+                </button>
+              )}
               {saveSuccess && (
                 <span className="text-sm text-green-600">Saved</span>
               )}
             </div>
+
+            {/* Skip request form — tech only, in_progress */}
+            {skipRequestOpen && isTech && (
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Why should this PM be skipped?
+                </label>
+                <textarea
+                  value={skipReason}
+                  onChange={(e) => setSkipReason(e.target.value)}
+                  placeholder="e.g., Customer requested to reschedule, machine is down..."
+                  rows={3}
+                  className="w-full rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRequestSkip}
+                    disabled={loading || !skipReason.trim()}
+                    className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                  >
+                    {loading ? 'Submitting...' : 'Submit Skip Request'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSkipRequestOpen(false); setSkipReason('') }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </form>
           {(userRole === 'super_admin' || userRole === 'manager') && (
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -1138,6 +1280,65 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
           {superAdminOverride}
         </div>
         {deleteButton}
+      </>
+    )
+  }
+
+  // ══════════════════════════════════════════════
+  // RENDER: Skip Requested — Pending Approval
+  // ══════════════════════════════════════════════
+
+  if (ticket.status === 'skip_requested') {
+    return (
+      <>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-5">
+          <h2 className="text-sm font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-4">
+            Skip Requested
+          </h2>
+          {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+
+          {/* Show the reason */}
+          <div className="bg-amber-50 dark:bg-amber-900/20 rounded-md p-3 mb-4 border border-amber-200 dark:border-amber-800">
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">Reason</p>
+            <p className="text-sm text-gray-900 dark:text-white">{ticket.skip_reason || '—'}</p>
+          </div>
+
+          {isTech ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Your skip request has been submitted and is waiting for manager approval.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSkipDialogOpen(true)}
+                disabled={loading}
+                className="px-4 py-3 sm:py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors min-h-[44px]"
+              >
+                Approve Skip
+              </button>
+              <button
+                onClick={handleDenySkip}
+                disabled={loading}
+                className="px-4 py-3 sm:py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors min-h-[44px]"
+              >
+                {loading ? 'Denying...' : 'Deny Skip'}
+              </button>
+            </div>
+          )}
+          {superAdminOverride}
+          {deleteButton}
+        </div>
+
+        {skipDialogOpen && (
+          <SkipDialog
+            tickets={[ticket as any]}
+            onClose={() => setSkipDialogOpen(false)}
+            onDone={() => {
+              setSkipDialogOpen(false)
+              router.push(pathname)
+            }}
+          />
+        )}
       </>
     )
   }

@@ -25,6 +25,10 @@ const statusConfig: Record<TicketStatus, { label: string; classes: string }> = {
     label: 'Skipped',
     classes: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   },
+  skip_requested: {
+    label: 'Skip Requested',
+    classes: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  },
 }
 
 export default function StatusBadge({ status }: { status: TicketStatus }) {

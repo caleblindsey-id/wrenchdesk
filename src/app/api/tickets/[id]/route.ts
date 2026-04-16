@@ -22,6 +22,8 @@ const ALLOWED_FIELDS = [
   'billing_contact_phone',
   'additional_parts_used',
   'additional_hours_worked',
+  'skip_reason',
+  'skip_previous_status',
 ] as const
 
 // Techs can update status + draft completion fields (save progress)
@@ -38,6 +40,8 @@ const TECH_ALLOWED_FIELDS = [
   'billing_contact_phone',
   'additional_parts_used',
   'additional_hours_worked',
+  'skip_reason',
+  'skip_previous_status',
 ] as const
 
 type AllowedUpdate = Pick<PmTicketRow, typeof ALLOWED_FIELDS[number]>
@@ -45,11 +49,12 @@ type AllowedUpdate = Pick<PmTicketRow, typeof ALLOWED_FIELDS[number]>
 // Valid forward-only state transitions
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   unassigned: ['assigned', 'in_progress', 'skipped'],
-  assigned:   ['in_progress', 'unassigned', 'skipped'],
-  in_progress: ['completed', 'assigned', 'unassigned'],
+  assigned:   ['in_progress', 'unassigned', 'skipped', 'skip_requested'],
+  in_progress: ['completed', 'assigned', 'unassigned', 'skip_requested'],
   completed:  ['billed', 'in_progress'],
   billed:     ['completed', 'in_progress', 'assigned', 'unassigned'],
   skipped:    ['unassigned'],
+  skip_requested: ['skipped', 'in_progress', 'assigned'],
 }
 
 export async function PATCH(
@@ -143,9 +148,45 @@ export async function PATCH(
         return NextResponse.json(updated)
       }
 
-      // Skipping with optional reschedule
+      // Tech requesting a skip — store reason and previous status
+      if (nextStatus === 'skip_requested') {
+        const skipReason = typeof raw.skip_reason === 'string' ? raw.skip_reason.trim() : ''
+        if (!skipReason) {
+          return NextResponse.json({ error: 'A reason is required when requesting a skip' }, { status: 400 })
+        }
+
+        const updated = await updateTicket(id, {
+          status: 'skip_requested',
+          skip_reason: skipReason,
+          skip_previous_status: currentStatus,
+        } as any)
+        return NextResponse.json(updated)
+      }
+
+      // Manager denying a skip request — revert to previous status
+      if (currentStatus === 'skip_requested' && nextStatus !== 'skipped') {
+        if (isTechnician(user.role)) {
+          return NextResponse.json({ error: 'Only managers can approve or deny skip requests' }, { status: 403 })
+        }
+        const updated = await updateTicket(id, {
+          status: nextStatus,
+          skip_reason: null,
+          skip_previous_status: null,
+        } as any)
+        return NextResponse.json(updated)
+      }
+
+      // Skipping with optional reschedule (manager approval of skip request, or direct skip)
       if (nextStatus === 'skipped') {
-        const updated = await updateTicket(id, { status: 'skipped' })
+        if (currentStatus === 'skip_requested' && isTechnician(user.role)) {
+          return NextResponse.json({ error: 'Only managers can approve skip requests' }, { status: 403 })
+        }
+
+        const updated = await updateTicket(id, {
+          status: 'skipped',
+          skip_reason: null,
+          skip_previous_status: null,
+        } as any)
 
         // If a reschedule month was provided, update the schedule's anchor
         const rescheduleMonth = Number(raw.reschedule_month)

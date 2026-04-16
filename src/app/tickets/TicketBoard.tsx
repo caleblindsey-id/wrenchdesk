@@ -23,6 +23,7 @@ const STATUS_OPTIONS: { value: '' | TicketStatus; label: string }[] = [
   { value: 'completed', label: 'Completed' },
   { value: 'billed', label: 'Billed' },
   { value: 'skipped', label: 'Skipped' },
+  { value: 'skip_requested', label: 'Skip Requested' },
 ]
 
 interface TicketBoardProps {

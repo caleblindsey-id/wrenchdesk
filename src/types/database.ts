@@ -9,7 +9,7 @@ export const MANAGER_ROLES: UserRole[] = ['super_admin', 'manager', 'coordinator
 export const RESET_ROLES: UserRole[] = ['super_admin', 'manager']
 export const ADMIN_ROLES: UserRole[] = ['super_admin']
 
-export type TicketStatus = 'unassigned' | 'assigned' | 'in_progress' | 'completed' | 'billed' | 'skipped'
+export type TicketStatus = 'unassigned' | 'assigned' | 'in_progress' | 'completed' | 'billed' | 'skipped' | 'skip_requested'
 
 export type BillingType = 'flat_rate' | 'time_and_materials' | 'contract'
 
@@ -164,6 +164,8 @@ export type PmTicketRow = {
   work_order_number: number
   additional_parts_used: PartUsed[]
   additional_hours_worked: number | null
+  skip_reason: string | null
+  skip_previous_status: string | null
   created_at: string
   updated_at: string
 }
@@ -253,7 +255,7 @@ export type PmScheduleInsert = MakeOptional<
 
 export type PmTicketInsert = MakeOptional<
   Omit<PmTicketRow, 'id' | 'created_at' | 'updated_at'>,
-  'status' | 'billing_exported' | 'parts_used' | 'pm_schedule_id' | 'equipment_id' | 'customer_id' | 'assigned_technician_id' | 'created_by_id' | 'scheduled_date' | 'completed_date' | 'completion_notes' | 'hours_worked' | 'billing_amount' | 'work_order_number' | 'additional_parts_used' | 'additional_hours_worked' | 'customer_signature' | 'customer_signature_name' | 'photos' | 'po_number' | 'billing_contact_name' | 'billing_contact_email' | 'billing_contact_phone'
+  'status' | 'billing_exported' | 'parts_used' | 'pm_schedule_id' | 'equipment_id' | 'customer_id' | 'assigned_technician_id' | 'created_by_id' | 'scheduled_date' | 'completed_date' | 'completion_notes' | 'hours_worked' | 'billing_amount' | 'work_order_number' | 'additional_parts_used' | 'additional_hours_worked' | 'customer_signature' | 'customer_signature_name' | 'photos' | 'po_number' | 'billing_contact_name' | 'billing_contact_email' | 'billing_contact_phone' | 'skip_reason' | 'skip_previous_status'
 >
 
 export type SettingsRow = {
