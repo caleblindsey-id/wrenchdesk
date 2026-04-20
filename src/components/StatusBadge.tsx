@@ -31,13 +31,26 @@ const statusConfig: Record<TicketStatus, { label: string; classes: string }> = {
   },
 }
 
+const badgeBase =
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium'
+
+const overdueClasses =
+  'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+
 export default function StatusBadge({ status }: { status: TicketStatus }) {
   const config = statusConfig[status]
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.classes}`}
-    >
+    <span className={`${badgeBase} ${config.classes}`}>
       {config.label}
+    </span>
+  )
+}
+
+export function OverdueBadge({ days }: { days: number }) {
+  const suffix = days > 0 ? ` · ${days}d` : ''
+  return (
+    <span className={`${badgeBase} ${overdueClasses}`}>
+      OVERDUE{suffix}
     </span>
   )
 }

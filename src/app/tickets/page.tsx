@@ -1,36 +1,48 @@
 import { getTickets } from '@/lib/db/tickets'
 import { getUsers } from '@/lib/db/users'
 import { getCurrentUser, isTechnician } from '@/lib/auth'
-import { TicketStatus, UserRole } from '@/types/database'
+import { TicketStatus } from '@/types/database'
 import TicketBoard from './TicketBoard'
 
 export default async function TicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; year?: string; tech?: string; status?: string }>
+  searchParams: Promise<{ month?: string; year?: string; tech?: string; status?: string; overdue?: string }>
 }) {
   const params = await searchParams
   const now = new Date()
   const month = params.month ? parseInt(params.month) : now.getMonth() + 1
   const year = params.year ? parseInt(params.year) : now.getFullYear()
+  const overdueMode = params.overdue === '1'
 
   const user = await getCurrentUser()
   const isTech = isTechnician(user?.role ?? null)
 
-  const filters: Parameters<typeof getTickets>[0] = { month, year }
-  // Techs always see only their own tickets
+  const monthFilters: Parameters<typeof getTickets>[0] = { month, year }
   if (isTech && user) {
-    filters!.technicianId = user.id
+    monthFilters!.technicianId = user.id
   } else if (params.tech) {
-    filters!.technicianId = params.tech
+    monthFilters!.technicianId = params.tech
   }
-  if (params.status) filters!.status = params.status as TicketStatus
+  if (params.status) monthFilters!.status = params.status as TicketStatus
 
-  let tickets: Awaited<ReturnType<typeof getTickets>> = []
+  const overdueFilters: Parameters<typeof getTickets>[0] = { overdueOnly: true, now }
+  if (isTech && user) {
+    overdueFilters!.technicianId = user.id
+  } else if (params.tech) {
+    overdueFilters!.technicianId = params.tech
+  }
+
+  let monthTickets: Awaited<ReturnType<typeof getTickets>> = []
+  let overdueTickets: Awaited<ReturnType<typeof getTickets>> = []
   let users: Awaited<ReturnType<typeof getUsers>> = []
   let fetchError = false
   try {
-    ;[tickets, users] = await Promise.all([getTickets(filters), getUsers(true)])
+    ;[monthTickets, overdueTickets, users] = await Promise.all([
+      overdueMode ? Promise.resolve([]) : getTickets(monthFilters),
+      getTickets(overdueFilters),
+      getUsers(true),
+    ])
   } catch {
     fetchError = true
   }
@@ -49,12 +61,14 @@ export default async function TicketsPage({
         </p>
       </div>
       <TicketBoard
-        tickets={tickets}
+        tickets={monthTickets}
+        overdueTickets={overdueTickets}
         users={users}
         currentMonth={month}
         currentYear={year}
         userRole={user?.role ?? null}
         initialStatus={params.status ?? ''}
+        overdueMode={overdueMode}
       />
     </div>
   )

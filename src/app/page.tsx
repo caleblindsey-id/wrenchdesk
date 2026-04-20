@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getTickets } from '@/lib/db/tickets'
+import { getTickets, getOverdueTicketCount } from '@/lib/db/tickets'
 import { getCurrentUser, isTechnician } from '@/lib/auth'
 import {
   ClipboardList,
@@ -11,6 +11,7 @@ import {
   ChevronRight,
   DollarSign,
   AlertTriangle,
+  AlertOctagon,
 } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import SyncStatusBanner from '@/components/SyncStatusBanner'
@@ -42,11 +43,14 @@ export default async function DashboardPage() {
   const user = await getCurrentUser()
   const isTech = isTechnician(user?.role ?? null)
 
-  const tickets = await getTickets({
-    month,
-    year,
-    ...(isTech && user ? { technicianId: user.id } : {}),
-  })
+  const [tickets, overdueCount] = await Promise.all([
+    getTickets({
+      month,
+      year,
+      ...(isTech && user ? { technicianId: user.id } : {}),
+    }),
+    getOverdueTicketCount(isTech && user ? { technicianId: user.id } : {}),
+  ])
 
   const statusCards = isTech ? techStatusCards : allStatusCards
 
@@ -85,6 +89,36 @@ export default async function DashboardPage() {
           {monthName} {year} overview
         </p>
       </div>
+
+      {/* Overdue PMs — always surfaced regardless of month filter */}
+      {overdueCount > 0 && (
+        <Link
+          href="/tickets?overdue=1"
+          className="block bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800 p-4 hover:border-red-300 dark:hover:border-red-700 hover:shadow transition-all"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <AlertOctagon className="h-5 w-5 text-red-600 dark:text-red-400" />
+                <span className="text-sm font-semibold text-red-800 dark:text-red-300">
+                  Overdue PMs
+                </span>
+              </div>
+              <p className="text-xs text-red-700/80 dark:text-red-400/80 mt-1">
+                {isTech
+                  ? 'Tickets assigned to you from prior months that are still open.'
+                  : 'Tickets from prior months that are still open. Surfaces across all month filters.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-semibold text-red-700 dark:text-red-300">
+                {overdueCount}
+              </span>
+              <ChevronRight className="h-5 w-5 text-red-400 dark:text-red-500" />
+            </div>
+          </div>
+        </Link>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">

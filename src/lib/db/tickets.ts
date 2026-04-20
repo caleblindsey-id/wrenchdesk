@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { PmTicketRow, PmTicketUpdate, TicketStatus, PartUsed, TicketPhoto, BillingType } from '@/types/database'
+import { OVERDUE_ELIGIBLE_STATUSES } from '@/lib/overdue'
 
 export type TicketWithJoins = PmTicketRow & {
   customers: { name: string; billing_city: string | null; po_required: boolean; ar_terms: string | null } | null
@@ -22,6 +23,8 @@ export async function getTickets(filters?: {
   technicianId?: string
   status?: TicketStatus
   customerId?: number
+  overdueOnly?: boolean
+  now?: Date
 }): Promise<TicketWithJoins[]> {
   const supabase = await createClient()
 
@@ -36,20 +39,27 @@ export async function getTickets(filters?: {
     `)
     .order('created_at', { ascending: false })
 
-  if (filters?.month !== undefined) {
-    query = query.eq('month', filters.month)
-  }
-
-  if (filters?.year !== undefined) {
-    query = query.eq('year', filters.year)
+  if (filters?.overdueOnly) {
+    const now = filters.now ?? new Date()
+    const currentMonth = now.getMonth() + 1
+    const currentYear = now.getFullYear()
+    query = query
+      .in('status', OVERDUE_ELIGIBLE_STATUSES)
+      .or(`year.lt.${currentYear},and(year.eq.${currentYear},month.lt.${currentMonth})`)
+  } else {
+    if (filters?.month !== undefined) {
+      query = query.eq('month', filters.month)
+    }
+    if (filters?.year !== undefined) {
+      query = query.eq('year', filters.year)
+    }
+    if (filters?.status) {
+      query = query.eq('status', filters.status)
+    }
   }
 
   if (filters?.technicianId) {
     query = query.eq('assigned_technician_id', filters.technicianId)
-  }
-
-  if (filters?.status) {
-    query = query.eq('status', filters.status)
   }
 
   if (filters?.customerId !== undefined) {
@@ -60,6 +70,30 @@ export async function getTickets(filters?: {
 
   if (error) throw error
   return data as TicketWithJoins[]
+}
+
+export async function getOverdueTicketCount(filters?: {
+  technicianId?: string
+  now?: Date
+}): Promise<number> {
+  const supabase = await createClient()
+  const now = filters?.now ?? new Date()
+  const currentMonth = now.getMonth() + 1
+  const currentYear = now.getFullYear()
+
+  let query = supabase
+    .from('pm_tickets')
+    .select('id', { count: 'exact', head: true })
+    .in('status', OVERDUE_ELIGIBLE_STATUSES)
+    .or(`year.lt.${currentYear},and(year.eq.${currentYear},month.lt.${currentMonth})`)
+
+  if (filters?.technicianId) {
+    query = query.eq('assigned_technician_id', filters.technicianId)
+  }
+
+  const { count, error } = await query
+  if (error) throw error
+  return count ?? 0
 }
 
 export async function getTicket(id: string): Promise<TicketDetail | null> {
