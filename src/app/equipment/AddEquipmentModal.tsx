@@ -1,10 +1,18 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { BillingType, DefaultProduct } from '@/types/database'
 import { formatPhoneNumber } from '@/lib/phone'
+import { normalizeSerial, serialsMatch } from '@/lib/equipment'
 import { X, Plus, Minus, Trash2 } from 'lucide-react'
+
+type DuplicateMatch = {
+  id: string
+  make: string | null
+  model: string | null
+}
 
 interface CustomerOption {
   id: number
@@ -61,6 +69,7 @@ export default function AddEquipmentModal({
 }: AddEquipmentModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [duplicate, setDuplicate] = useState<DuplicateMatch | null>(null)
 
   // Customer combobox state
   const [customerSearch, setCustomerSearch] = useState('')
@@ -269,25 +278,53 @@ export default function AddEquipmentModal({
     setBillingType('flat_rate')
     setFlatRate('')
     setError(null)
+    setDuplicate(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setDuplicate(null)
 
     const supabase = createClient()
+    const normalizedSerial = normalizeSerial(serialNumber)
+    const customerIdNum = customerId ? parseInt(customerId) : null
+
+    // Step 0: Duplicate-serial pre-check (active records, same customer, case/whitespace-insensitive)
+    if (customerIdNum && normalizedSerial) {
+      const { data: candidates, error: dupError } = await supabase
+        .from('equipment')
+        .select('id, make, model, serial_number')
+        .eq('customer_id', customerIdNum)
+        .eq('active', true)
+        .ilike('serial_number', `%${normalizedSerial}%`)
+
+      if (dupError) {
+        setError(dupError.message)
+        setLoading(false)
+        return
+      }
+
+      const match = (candidates ?? []).find((row) => serialsMatch(row.serial_number, normalizedSerial))
+      if (match) {
+        setDuplicate({ id: match.id, make: match.make, model: match.model })
+        setError(null)
+        setLoading(false)
+        return
+      }
+    }
 
     // Step 1: Insert equipment
     const { data: equipment, error: insertError } = await supabase
       .from('equipment')
       .insert({
-        customer_id: customerId ? parseInt(customerId) : null,
+        customer_id: customerIdNum,
         ship_to_location_id: shipToLocationId ? parseInt(shipToLocationId) : null,
         default_technician_id: defaultTechId || null,
         make: make || null,
         model: model || null,
-        serial_number: serialNumber || null,
+        serial_number: normalizedSerial,
         description: description || null,
         location_on_site: locationOnSite || null,
         contact_name: contactName || null,
@@ -300,7 +337,11 @@ export default function AddEquipmentModal({
       .single()
 
     if (insertError) {
-      setError(insertError.message)
+      if (insertError.code === '23505' && insertError.message?.includes('idx_equipment_customer_serial')) {
+        setError('This customer already has active equipment with that serial number.')
+      } else {
+        setError(insertError.message)
+      }
       setLoading(false)
       return
     }
@@ -352,6 +393,21 @@ export default function AddEquipmentModal({
           </button>
         </div>
 
+        {duplicate && (
+          <p className="text-sm text-red-600 dark:text-red-400 mb-3">
+            This customer already has active equipment with that serial number
+            {duplicate.make || duplicate.model
+              ? ` — ${[duplicate.make, duplicate.model].filter(Boolean).join(' ')}`
+              : ''}
+            .{' '}
+            <Link
+              href={`/equipment/${duplicate.id}`}
+              className="underline text-red-700 dark:text-red-300 hover:text-red-800 dark:hover:text-red-200"
+            >
+              View existing
+            </Link>
+          </p>
+        )}
         {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
 
         <form onSubmit={handleSubmit} className="space-y-3">

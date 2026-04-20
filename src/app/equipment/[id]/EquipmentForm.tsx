@@ -1,10 +1,18 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { EquipmentRow, UserRow } from '@/types/database'
 import { formatPhoneNumber } from '@/lib/phone'
+import { normalizeSerial, serialsMatch } from '@/lib/equipment'
+
+type DuplicateMatch = {
+  id: string
+  make: string | null
+  model: string | null
+}
 
 interface EquipmentFormProps {
   equipment: EquipmentRow & { customers: { name: string } | null }
@@ -17,6 +25,7 @@ export default function EquipmentForm({ equipment, users, shipToLocations, isTec
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [duplicate, setDuplicate] = useState<DuplicateMatch | null>(null)
   const [success, setSuccess] = useState(false)
 
   const [make, setMake] = useState(equipment.make ?? '')
@@ -36,9 +45,37 @@ export default function EquipmentForm({ equipment, users, shipToLocations, isTec
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setDuplicate(null)
     setSuccess(false)
 
     const supabase = createClient()
+    const normalizedSerial = normalizeSerial(serialNumber)
+
+    // Duplicate-serial pre-check (only for managers editing serial/active, and only when the
+    // target state is active with a serial and customer set).
+    if (!isTech && active && normalizedSerial && equipment.customer_id) {
+      const { data: candidates, error: dupError } = await supabase
+        .from('equipment')
+        .select('id, make, model, serial_number')
+        .eq('customer_id', equipment.customer_id)
+        .eq('active', true)
+        .neq('id', equipment.id)
+        .ilike('serial_number', `%${normalizedSerial}%`)
+
+      if (dupError) {
+        setError(dupError.message)
+        setLoading(false)
+        return
+      }
+
+      const match = (candidates ?? []).find((row) => serialsMatch(row.serial_number, normalizedSerial))
+      if (match) {
+        setDuplicate({ id: match.id, make: match.make, model: match.model })
+        setLoading(false)
+        return
+      }
+    }
+
     const updateData = isTech
       ? {
           contact_name: contactName || null,
@@ -48,7 +85,7 @@ export default function EquipmentForm({ equipment, users, shipToLocations, isTec
       : {
           make: make || null,
           model: model || null,
-          serial_number: serialNumber || null,
+          serial_number: normalizedSerial,
           description: description || null,
           location_on_site: locationOnSite || null,
           blanket_po_number: blanketPoNumber || null,
@@ -65,7 +102,11 @@ export default function EquipmentForm({ equipment, users, shipToLocations, isTec
       .eq('id', equipment.id)
 
     if (updateError) {
-      setError(updateError.message)
+      if (updateError.code === '23505' && updateError.message?.includes('idx_equipment_customer_serial')) {
+        setError('This customer already has active equipment with that serial number.')
+      } else {
+        setError(updateError.message)
+      }
     } else {
       setSuccess(true)
       router.refresh()
@@ -78,8 +119,23 @@ export default function EquipmentForm({ equipment, users, shipToLocations, isTec
       <h2 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide mb-4">
         Equipment Details
       </h2>
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-      {success && <p className="text-sm text-green-600 mb-3">Saved.</p>}
+      {duplicate && (
+        <p className="text-sm text-red-600 dark:text-red-400 mb-3">
+          This customer already has active equipment with that serial number
+          {duplicate.make || duplicate.model
+            ? ` — ${[duplicate.make, duplicate.model].filter(Boolean).join(' ')}`
+            : ''}
+          .{' '}
+          <Link
+            href={`/equipment/${duplicate.id}`}
+            className="underline text-red-700 dark:text-red-300 hover:text-red-800 dark:hover:text-red-200"
+          >
+            View existing
+          </Link>
+        </p>
+      )}
+      {error && <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>}
+      {success && <p className="text-sm text-green-600 dark:text-green-400 mb-3">Saved.</p>}
       <form onSubmit={handleSubmit} className="space-y-3 max-w-xl">
         <div className="grid grid-cols-2 gap-3">
           <div>

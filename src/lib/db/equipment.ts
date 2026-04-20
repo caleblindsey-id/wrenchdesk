@@ -1,5 +1,22 @@
 import { createClient } from '@/lib/supabase/server'
 import { EquipmentRow, EquipmentInsert, EquipmentProspectRow, PmScheduleRow, PmTicketRow } from '@/types/database'
+import { normalizeSerial, serialsMatch } from '@/lib/equipment'
+
+export type DuplicateEquipmentMatch = {
+  id: string
+  make: string | null
+  model: string | null
+  serial_number: string | null
+  active: boolean
+}
+
+function translateSerialUniqueError(error: { code?: string; message?: string } | null): Error | null {
+  if (!error) return null
+  if (error.code === '23505' && error.message?.includes('idx_equipment_customer_serial')) {
+    return new Error('This customer already has active equipment with that serial number.')
+  }
+  return null
+}
 
 export type EquipmentWithCustomer = EquipmentRow & {
   customers: { name: string } | null
@@ -107,16 +124,50 @@ export async function getEquipmentServiceHistory(
   return data as PmTicketRow[]
 }
 
+export async function findDuplicateEquipment(params: {
+  customerId: number
+  serialNumber: string
+  excludeId?: string
+}): Promise<DuplicateEquipmentMatch | null> {
+  const normalized = normalizeSerial(params.serialNumber)
+  if (!normalized) return null
+
+  const supabase = await createClient()
+
+  // Pull active rows for this customer with a case-insensitive prefix-ish match.
+  // We re-check in JS because PostgREST can't express LOWER(BTRIM(...)) directly.
+  let query = supabase
+    .from('equipment')
+    .select('id, make, model, serial_number, active')
+    .eq('customer_id', params.customerId)
+    .eq('active', true)
+    .ilike('serial_number', `%${normalized}%`)
+
+  if (params.excludeId) {
+    query = query.neq('id', params.excludeId)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+
+  const match = (data ?? []).find((row) => serialsMatch(row.serial_number, normalized))
+  return (match as DuplicateEquipmentMatch | undefined) ?? null
+}
+
 export async function createEquipment(data: EquipmentInsert): Promise<EquipmentRow> {
   const supabase = await createClient()
 
   const { data: created, error } = await supabase
     .from('equipment')
-    .insert(data )
+    .insert(data)
     .select()
     .single()
 
-  if (error) throw error
+  if (error) {
+    const friendly = translateSerialUniqueError(error)
+    if (friendly) throw friendly
+    throw error
+  }
   return created as EquipmentRow
 }
 
@@ -128,12 +179,16 @@ export async function updateEquipment(
 
   const { data: updated, error } = await supabase
     .from('equipment')
-    .update(data )
+    .update(data)
     .eq('id', id)
     .select()
     .single()
 
-  if (error) throw error
+  if (error) {
+    const friendly = translateSerialUniqueError(error)
+    if (friendly) throw friendly
+    throw error
+  }
   return updated as EquipmentRow
 }
 
