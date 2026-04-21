@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
 PM Scheduler — Nightly Synergy Order Validation
-Checks service_tickets.synergy_order_number against roh.OrdNum in Synergy.
-Flags mismatches as 'invalid' so office staff can correct them.
+
+Validates two things for open service and PM tickets:
+
+  1. `synergy_order_number` exists as `OrdNum` in Synergy `roh`
+     → writes result to `synergy_validation_status` ('valid' / 'invalid')
+
+  2. Each requested part's Synergy item number (`product_number`)
+     appears as a `ProdCode` on that order in `rolnew`
+     → writes result to `parts_validation_status`
+        ('valid' = all parts match, 'partial' = some match, 'invalid' = none match,
+         NULL = order invalid / no parts)
 
 Runs nightly at 5:30 AM via Windows Task Scheduler (after the 5 AM sync).
 """
@@ -66,7 +75,6 @@ def supabase_headers() -> dict:
 
 
 def supabase_get(table: str, params: dict) -> list[dict]:
-    """GET rows from Supabase REST API."""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     headers = supabase_headers()
     headers["Prefer"] = "return=representation"
@@ -76,7 +84,6 @@ def supabase_get(table: str, params: dict) -> list[dict]:
 
 
 def supabase_patch_by_id(table: str, row_id: str, data: dict) -> None:
-    """PATCH a row by UUID id."""
     url = f"{SUPABASE_URL}/rest/v1/{table}?id=eq.{row_id}"
     headers = supabase_headers()
     headers["Prefer"] = "return=minimal"
@@ -87,54 +94,98 @@ def supabase_patch_by_id(table: str, row_id: str, data: dict) -> None:
 # Main validation logic
 # ============================================================
 
-def main():
+EXCLUDED_SERVICE_STATUSES = ("canceled", "declined")
+# For PM tickets, stop chasing once the ticket is billed or skipped.
+EXCLUDED_PM_STATUSES = ("skipped",)
+
+
+def fetch_candidates(table: str, excluded_statuses: tuple[str, ...]) -> list[dict]:
+    """Fetch tickets from the given table that have an order # and are still actionable."""
+    excluded = ",".join(excluded_statuses)
+    return supabase_get(table, {
+        "select": "id,synergy_order_number,parts_requested,status",
+        "synergy_order_number": "not.is.null",
+        "status": f"not.in.({excluded})",
+    })
+
+
+def classify_parts(parts: list[dict], prodcodes_for_order: set[str]) -> str | None:
+    """
+    Return 'valid' / 'partial' / 'invalid' / None for the part set.
+    Only considers parts that have moved past 'requested' (i.e. status in ordered/received).
+    Returns None when there is nothing to validate.
+    """
+    checkable = [
+        p for p in (parts or [])
+        if p.get("status") in ("ordered", "received") and (p.get("product_number") or "").strip()
+    ]
+    if not checkable:
+        return None
+
+    matches = sum(1 for p in checkable if (p["product_number"] or "").strip() in prodcodes_for_order)
+    if matches == len(checkable):
+        return "valid"
+    if matches == 0:
+        return "invalid"
+    return "partial"
+
+
+def main() -> None:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         log.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.")
         sys.exit(1)
 
     log.info("=" * 60)
-    log.info("Synergy Order Validation — starting")
+    log.info("Synergy Order + Parts Validation — starting")
     log.info("=" * 60)
 
-    # 1. Fetch service tickets with order numbers
-    log.info("Fetching service tickets with Synergy order numbers...")
-    tickets = supabase_get("service_tickets", {
-        "select": "id,synergy_order_number",
-        "synergy_order_number": "not.is.null",
-        "status": "not.in.(canceled,declined)",
-    })
+    # 1. Fetch candidates from both ticket tables
+    log.info("Fetching service_tickets with Synergy order numbers...")
+    service_tickets = fetch_candidates("service_tickets", EXCLUDED_SERVICE_STATUSES)
+    log.info(f"  service_tickets: {len(service_tickets)}")
 
-    if not tickets:
-        log.info("No service tickets with order numbers found. Nothing to validate.")
+    log.info("Fetching pm_tickets with Synergy order numbers...")
+    pm_tickets = fetch_candidates("pm_tickets", EXCLUDED_PM_STATUSES)
+    log.info(f"  pm_tickets: {len(pm_tickets)}")
+
+    all_rows = [("service_tickets", t) for t in service_tickets] + \
+               [("pm_tickets", t) for t in pm_tickets]
+
+    if not all_rows:
+        log.info("No tickets with order numbers found. Nothing to validate.")
         return
 
-    log.info(f"Found {len(tickets)} tickets with order numbers.")
-
-    # 2. Collect unique order numbers
-    order_map: dict[int, list[str]] = {}  # OrdNum -> list of ticket IDs
-    skipped = 0
-    for t in tickets:
-        raw = str(t["synergy_order_number"]).strip()
+    # 2. Bucket order numbers (OrdNum -> list of (table, ticket_id))
+    order_map: dict[int, list[tuple[str, str]]] = {}
+    non_numeric: list[tuple[str, str, str]] = []  # (table, id, raw)
+    for table, t in all_rows:
+        raw = str(t.get("synergy_order_number") or "").strip()
         try:
             ord_num = int(raw)
-            order_map.setdefault(ord_num, []).append(t["id"])
         except ValueError:
-            # Non-numeric order numbers are automatically invalid
-            log.warning(f"  Ticket {t['id']}: non-numeric order number '{raw}' — marking invalid")
-            skipped += 1
-            supabase_patch_by_id("service_tickets", t["id"], {
-                "synergy_validation_status": "invalid",
-                "synergy_validated_at": datetime.now(timezone.utc).isoformat(),
-            })
+            non_numeric.append((table, t["id"], raw))
+            continue
+        order_map.setdefault(ord_num, []).append((table, t["id"]))
+
+    # Mark non-numeric order #s invalid straight away
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for table, tid, raw in non_numeric:
+        log.warning(f"  {table} {tid}: non-numeric order # '{raw}' — marking invalid")
+        supabase_patch_by_id(table, tid, {
+            "synergy_validation_status": "invalid",
+            "synergy_validated_at": now_iso,
+            "parts_validation_status": None,
+        })
 
     unique_orders = list(order_map.keys())
-    log.info(f"Unique order numbers to validate: {len(unique_orders)} ({skipped} skipped as non-numeric)")
+    log.info(f"Unique numeric order numbers to validate: {len(unique_orders)} "
+             f"({len(non_numeric)} skipped as non-numeric)")
 
     if not unique_orders:
         log.info("No numeric order numbers to validate.")
         return
 
-    # 3. Query Synergy for matching OrdNums
+    # 3. Query Synergy
     log.info("Connecting to Synergy ERP (DSN=ERPlinked)...")
     try:
         conn = pyodbc.connect("DSN=ERPlinked", autocommit=True, timeout=30)
@@ -143,44 +194,79 @@ def main():
         log.error(f"Failed to connect to Synergy: {e}")
         sys.exit(1)
 
-    # Batch the IN clause if there are many order numbers
+    # 3a. Which orders exist?
     valid_orders: set[int] = set()
     batch_size = 100
     for i in range(0, len(unique_orders), batch_size):
         batch = unique_orders[i:i + batch_size]
         placeholders = ",".join(str(o) for o in batch)
-        sql = f"SELECT OrdNum FROM roh WHERE OrdNum IN ({placeholders})"
-        cursor.execute(sql)
+        cursor.execute(f"SELECT OrdNum FROM roh WHERE OrdNum IN ({placeholders})")
         for row in cursor.fetchall():
             valid_orders.add(row[0])
-
-    conn.close()
     log.info(f"Synergy returned {len(valid_orders)} matching orders out of {len(unique_orders)} checked.")
 
-    # 4. Update validation status on each ticket
-    now_iso = datetime.now(timezone.utc).isoformat()
-    valid_count = 0
-    invalid_count = 0
+    # 3b. Fetch every ProdCode on each valid order (one query, batched)
+    prodcodes_by_order: dict[int, set[str]] = {}
+    valid_list = sorted(valid_orders)
+    for i in range(0, len(valid_list), batch_size):
+        batch = valid_list[i:i + batch_size]
+        placeholders = ",".join(str(o) for o in batch)
+        cursor.execute(
+            f"SELECT OrdNum, ProdCode FROM rolnew WHERE OrdNum IN ({placeholders})"
+        )
+        for ord_num, prod_code in cursor.fetchall():
+            if prod_code is None:
+                continue
+            prodcodes_by_order.setdefault(ord_num, set()).add(str(prod_code).strip())
 
-    for ord_num, ticket_ids in order_map.items():
-        status = "valid" if ord_num in valid_orders else "invalid"
-        for tid in ticket_ids:
-            supabase_patch_by_id("service_tickets", tid, {
-                "synergy_validation_status": status,
+    conn.close()
+
+    # 4. Write status per ticket
+    valid_count = invalid_count = parts_valid = parts_partial = parts_invalid = 0
+    rows_by_id: dict[tuple[str, str], dict] = {(tbl, t["id"]): t for tbl, t in all_rows}
+
+    for ord_num, tickets in order_map.items():
+        order_ok = ord_num in valid_orders
+        order_prodcodes = prodcodes_by_order.get(ord_num, set())
+
+        for table, tid in tickets:
+            ticket = rows_by_id[(table, tid)]
+            patch: dict = {
+                "synergy_validation_status": "valid" if order_ok else "invalid",
                 "synergy_validated_at": now_iso,
-            })
-            if status == "valid":
-                valid_count += 1
-            else:
+            }
+
+            if not order_ok:
+                # Order-level failure overrides parts validation
+                patch["parts_validation_status"] = None
                 invalid_count += 1
-                log.warning(f"  INVALID: Ticket {tid} — order #{ord_num} not found in Synergy")
+                log.warning(f"  INVALID: {table} {tid} — order #{ord_num} not found in Synergy")
+            else:
+                valid_count += 1
+                parts_status = classify_parts(ticket.get("parts_requested") or [], order_prodcodes)
+                patch["parts_validation_status"] = parts_status
+                if parts_status == "valid":
+                    parts_valid += 1
+                elif parts_status == "partial":
+                    parts_partial += 1
+                    log.warning(
+                        f"  PARTS PARTIAL: {table} {tid} — order #{ord_num} has some item #s not on the order")
+                elif parts_status == "invalid":
+                    parts_invalid += 1
+                    log.warning(
+                        f"  PARTS INVALID: {table} {tid} — none of the requested item #s appear on order #{ord_num}")
+
+            supabase_patch_by_id(table, tid, patch)
 
     # 5. Summary
     log.info("-" * 40)
-    log.info(f"Validation complete:")
-    log.info(f"  Valid:   {valid_count}")
-    log.info(f"  Invalid: {invalid_count}")
-    log.info(f"  Skipped: {skipped}")
+    log.info("Validation complete:")
+    log.info(f"  Orders valid:        {valid_count}")
+    log.info(f"  Orders invalid:      {invalid_count}")
+    log.info(f"  Orders non-numeric:  {len(non_numeric)}")
+    log.info(f"  Parts valid:         {parts_valid}")
+    log.info(f"  Parts partial:       {parts_partial}")
+    log.info(f"  Parts invalid:       {parts_invalid}")
     log.info("=" * 60)
 
 

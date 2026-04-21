@@ -277,9 +277,19 @@ export async function PATCH(
       filtered.synergy_validated_at = null
     }
 
-    // --- Parts received check ---
+    // --- Parts received check + Synergy item # gate ---
     if (filtered.parts_requested !== undefined) {
       const parts = filtered.parts_requested as PartRequest[]
+      // Any part that has moved past 'requested' must have a Synergy item # (product_number) captured
+      const missingItemNo = parts.find(
+        (p: PartRequest) => p.status !== 'requested' && !p.product_number?.trim()
+      )
+      if (missingItemNo) {
+        return NextResponse.json(
+          { error: 'Synergy item # is required on any part marked ordered or received.' },
+          { status: 400 }
+        )
+      }
       const allReceived = parts.length > 0 && parts.every((p: PartRequest) => p.status === 'received')
       filtered.parts_received = allReceived
     }

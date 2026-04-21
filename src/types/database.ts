@@ -42,7 +42,11 @@ export interface TicketPhoto {
 export interface PartRequest {
   description: string
   quantity: number
+  // Synergy item number (display string, e.g. "146400019"). Source of truth for billing.
   product_number?: string
+  // Int form of products.synergy_id — set when the office picks a catalog match.
+  // Same convention as PartUsed.synergy_product_id (Number(products.synergy_id)).
+  synergy_product_id?: number | null
   po_number?: string
   status: 'requested' | 'ordered' | 'received'
 }

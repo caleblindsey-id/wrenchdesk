@@ -9,6 +9,7 @@ import CreditHoldBadge from '@/components/CreditHoldBadge'
 import SignaturePad from '@/components/SignaturePad'
 import ReadOnlyPhotos from '@/components/ReadOnlyPhotos'
 import PartsEntryList, { PartEntry, emptyPart, partsFromSaved, toServicePartUsed } from '@/components/service/PartsEntryList'
+import PartSynergyPicker from '@/components/PartSynergyPicker'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/image-utils'
 import type {
@@ -396,8 +397,35 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
   }
 
   async function handleUpdatePartStatus(index: number, status: PartRequest['status']) {
+    if (status === 'ordered') {
+      if (!synergyOrderNumber.trim()) {
+        setError('Enter the Synergy Order # below before marking parts ordered.')
+        return
+      }
+      const part = partsRequested[index]
+      if (!part.product_number?.trim()) {
+        setError('Enter the Synergy item # for this part before marking it ordered.')
+        return
+      }
+    }
     const updatedParts = [...partsRequested]
     updatedParts[index] = { ...updatedParts[index], status }
+    await apiAction(async () => {
+      await patchTicket({ parts_requested: updatedParts })
+      setPartsRequested(updatedParts)
+    })
+  }
+
+  async function handleSavePartSynergy(index: number, next: { product_number: string; synergy_product_id: number | null }) {
+    const updatedParts = partsRequested.map((p, i) =>
+      i === index
+        ? {
+            ...p,
+            product_number: next.product_number,
+            synergy_product_id: next.synergy_product_id ?? undefined,
+          }
+        : p
+    )
     await apiAction(async () => {
       await patchTicket({ parts_requested: updatedParts })
       setPartsRequested(updatedParts)
@@ -1038,11 +1066,11 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                         <div className="flex-1 min-w-0">
                           <span className="text-sm text-gray-900 dark:text-white font-medium">{part.description}</span>
-                          {part.product_number && (
+                          {part.product_number && isTech && (
                             <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">#{part.product_number}</span>
                           )}
                           <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">x{part.quantity}</span>
-                          {part.po_number && (
+                          {part.po_number && isTech && (
                             <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">PO: {part.po_number}</span>
                           )}
                         </div>
@@ -1053,8 +1081,14 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
                           {isStaff && part.status === 'requested' && (
                             <button
                               onClick={() => handleUpdatePartStatus(i, 'ordered')}
-                              disabled={loading || !synergyOrderNumber.trim()}
-                              title={!synergyOrderNumber.trim() ? 'Enter Synergy Order # below first' : undefined}
+                              disabled={loading || !synergyOrderNumber.trim() || !part.product_number?.trim()}
+                              title={
+                                !synergyOrderNumber.trim()
+                                  ? 'Enter Synergy Order # below first'
+                                  : !part.product_number?.trim()
+                                  ? 'Enter Synergy item # first'
+                                  : undefined
+                              }
                               className="px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 min-h-[44px] sm:min-h-0"
                             >
                               Mark Ordered
@@ -1081,6 +1115,18 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
                           )}
                         </div>
                       </div>
+                      {/* Synergy item # picker — staff only, required to mark ordered */}
+                      {isStaff && (
+                        <div className="ml-0 sm:ml-4">
+                          <PartSynergyPicker
+                            productNumber={part.product_number}
+                            synergyProductId={part.synergy_product_id ?? null}
+                            onChange={(next) => handleSavePartSynergy(i, next)}
+                            disabled={loading}
+                          />
+                        </div>
+                      )}
+
                       {/* PO number input — staff can enter when marking ordered or after */}
                       {isStaff && (part.status === 'ordered' || part.status === 'received') && (
                         <div className="flex items-center gap-2 ml-0 sm:ml-4">

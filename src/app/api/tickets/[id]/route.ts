@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { updateTicket } from '@/lib/db/tickets'
 import { updateAnchorMonth } from '@/lib/db/schedules'
 import { getCurrentUser, isTechnician, RESET_ROLES } from '@/lib/auth'
-import { PmTicketRow, TicketStatus } from '@/types/database'
+import { PmTicketRow, TicketStatus, PartRequest } from '@/types/database'
 
 // Only allow these fields to be updated via PATCH
 const ALLOWED_FIELDS = [
@@ -91,6 +91,20 @@ export async function PATCH(
         { error: 'No recognized fields in request body' },
         { status: 400 }
       )
+    }
+
+    // Synergy item # gate: any part past 'requested' must have product_number set
+    if (filtered.parts_requested !== undefined) {
+      const parts = filtered.parts_requested as unknown as PartRequest[]
+      const missingItemNo = parts.find(
+        (p) => p.status !== 'requested' && !p.product_number?.trim()
+      )
+      if (missingItemNo) {
+        return NextResponse.json(
+          { error: 'Synergy item # is required on any part marked ordered or received.' },
+          { status: 400 }
+        )
+      }
     }
 
     // If a status transition is requested, validate it against the state machine
