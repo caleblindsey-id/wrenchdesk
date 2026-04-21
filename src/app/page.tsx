@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getTickets, getOverdueTicketCount } from '@/lib/db/tickets'
+import { getServiceTicketCounts, getPartsToOrderCount, getPartsOnOrderCount, getPartsReadyForPickupCount } from '@/lib/db/service-tickets'
 import { getCurrentUser, isTechnician } from '@/lib/auth'
 import {
   ClipboardList,
@@ -12,6 +13,10 @@ import {
   DollarSign,
   AlertTriangle,
   AlertOctagon,
+  Headset,
+  PackageSearch,
+  PackageCheck,
+  Truck,
 } from 'lucide-react'
 import StatusBadge from '@/components/StatusBadge'
 import SyncStatusBanner from '@/components/SyncStatusBanner'
@@ -43,13 +48,17 @@ export default async function DashboardPage() {
   const user = await getCurrentUser()
   const isTech = isTechnician(user?.role ?? null)
 
-  const [tickets, overdueCount] = await Promise.all([
+  const [tickets, overdueCount, serviceCounts, partsToOrderCount, partsOnOrderCount, partsReadyForPickupCount] = await Promise.all([
     getTickets({
       month,
       year,
       ...(isTech && user ? { technicianId: user.id } : {}),
     }),
     getOverdueTicketCount(isTech && user ? { technicianId: user.id } : {}),
+    getServiceTicketCounts(isTech && user ? user.id : undefined),
+    isTech ? Promise.resolve(0) : getPartsToOrderCount(),
+    isTech ? Promise.resolve(0) : getPartsOnOrderCount(),
+    getPartsReadyForPickupCount(),
   ])
 
   const statusCards = isTech ? techStatusCards : allStatusCards
@@ -120,8 +129,13 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+      {/* PM Ticket Stat Cards */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+          PM Tickets — {monthName}
+        </h2>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 -mt-3">
         {statusCards.map((card) => {
           const Icon = card.icon
           return (
@@ -157,6 +171,82 @@ export default async function DashboardPage() {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Service Ticket Cards */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+          Service Tickets
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+          {[
+            { key: 'open', label: 'Open', color: 'text-green-500' },
+            { key: 'estimated', label: 'Estimated', color: 'text-yellow-500' },
+            { key: 'approved', label: 'Approved', color: 'text-purple-500' },
+            { key: 'in_progress', label: 'In Progress', color: 'text-blue-500' },
+            { key: 'completed', label: 'Completed', color: 'text-emerald-500' },
+          ].map((card) => (
+            <Link
+              key={card.key}
+              href={`/service?status=${card.key}`}
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow transition-all"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{card.label}</span>
+                <Headset className={`h-5 w-5 ${card.color}`} />
+              </div>
+              <p className="mt-2 text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
+                {serviceCounts[card.key] ?? 0}
+              </p>
+            </Link>
+          ))}
+
+          {/* Parts to Order — office staff only */}
+          {!isTech && (
+            <Link
+              href="/service?waitingOnParts=true"
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow transition-all"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Parts to Order</span>
+                <PackageSearch className="h-5 w-5 text-amber-500" />
+              </div>
+              <p className="mt-2 text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
+                {partsToOrderCount}
+              </p>
+            </Link>
+          )}
+
+          {/* Parts on Order — office staff only */}
+          {!isTech && (
+            <Link
+              href="/service"
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow transition-all"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Parts on Order</span>
+                <Truck className="h-5 w-5 text-orange-500" />
+              </div>
+              <p className="mt-2 text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
+                {partsOnOrderCount}
+              </p>
+            </Link>
+          )}
+
+          {/* Ready for Pickup — all roles including techs */}
+          <Link
+            href="/service"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow transition-all"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Ready for Pickup</span>
+              <PackageCheck className="h-5 w-5 text-green-500" />
+            </div>
+            <p className="mt-2 text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
+              {partsReadyForPickupCount}
+            </p>
+          </Link>
+        </div>
       </div>
 
       {/* Upcoming PMs */}

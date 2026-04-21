@@ -24,6 +24,8 @@ const ALLOWED_FIELDS = [
   'additional_hours_worked',
   'skip_reason',
   'skip_previous_status',
+  'parts_requested',
+  'synergy_order_number',
   'machine_hours',
   'date_code',
 ] as const
@@ -44,6 +46,7 @@ const TECH_ALLOWED_FIELDS = [
   'additional_hours_worked',
   'skip_reason',
   'skip_previous_status',
+  'parts_requested',
   'machine_hours',
   'date_code',
 ] as const

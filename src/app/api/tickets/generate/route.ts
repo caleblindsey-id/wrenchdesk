@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Preview mode: don't insert, just report what would happen
+    // Preview mode: don't touch the DB — just report what would happen
     if (preview) {
       return NextResponse.json({
         preview: true,
@@ -163,16 +163,40 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Auto-cancel unassigned prior-month orphans for schedules we're about to generate.
+    // This handles the case where a monthly PM sat untouched and the next month's ticket is now being created.
+    const scheduleIdsToCreate = ticketsToCreate.map(t => t.pm_schedule_id).filter(Boolean) as string[]
+    if (scheduleIdsToCreate.length > 0) {
+      const { data: candidateOrphans } = await supabase
+        .from('pm_tickets')
+        .select('id, month, year')
+        .in('pm_schedule_id', scheduleIdsToCreate)
+        .eq('status', 'unassigned')
+
+      const orphanIds = (candidateOrphans ?? [])
+        .filter(t => t.month !== month || t.year !== year)
+        .map(t => t.id)
+
+      if (orphanIds.length > 0) {
+        const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' })
+        await supabase
+          .from('pm_tickets')
+          .update({ status: 'skipped', skip_reason: `Superseded by ${monthName} ${year} generation` })
+          .in('id', orphanIds)
+        skipped += orphanIds.length
+      }
+    }
+
     let created: PmTicketRow[] = []
 
     if (ticketsToCreate.length > 0) {
       const { data: insertedTickets, error: insertError } = await supabase
         .from('pm_tickets')
-        .insert(ticketsToCreate)
+        .upsert(ticketsToCreate, { onConflict: 'pm_schedule_id,month,year', ignoreDuplicates: true })
         .select()
 
       if (insertError) throw insertError
-      created = insertedTickets
+      created = insertedTickets ?? []
     }
 
     return NextResponse.json({

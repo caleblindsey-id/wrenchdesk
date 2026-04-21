@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { completeTicket } from '@/lib/db/tickets'
+import { updateAnchorMonth } from '@/lib/db/schedules'
 import { getCurrentUser, isTechnician } from '@/lib/auth'
 import { PartUsed, TicketPhoto } from '@/types/database'
 
@@ -70,7 +71,7 @@ export async function POST(
     const supabase = await createClient()
     const { data: current, error: fetchError } = await supabase
       .from('pm_tickets')
-      .select('status, assigned_technician_id')
+      .select('status, assigned_technician_id, parts_requested, month, year, pm_schedule_id')
       .eq('id', id)
       .single()
 
@@ -87,6 +88,17 @@ export async function POST(
       return NextResponse.json(
         { error: `Ticket is already ${current.status} and cannot be re-completed` },
         { status: 409 }
+      )
+    }
+
+    // Hard block: all requested parts must be received before completing
+    const pendingParts = ((current.parts_requested ?? []) as Array<{ status: string }>).filter(
+      p => p.status !== 'received'
+    )
+    if (pendingParts.length > 0) {
+      return NextResponse.json(
+        { error: `Cannot complete: ${pendingParts.length} part(s) are not yet received.` },
+        { status: 400 }
       )
     }
 
@@ -143,6 +155,36 @@ export async function POST(
       machineHours,
       dateCode: dateCode.trim(),
     })
+
+    // Slide billing period to completion month if work happened in a different month
+    const completionDate = new Date(completedDate + 'T12:00:00Z')
+    const completedMonth = completionDate.getUTCMonth() + 1
+    const completedYear = completionDate.getUTCFullYear()
+
+    if (completedMonth !== current.month || completedYear !== current.year) {
+      const { error: slideError } = await supabase
+        .from('pm_tickets')
+        .update({ month: completedMonth, year: completedYear })
+        .eq('id', id)
+
+      // 23505 = unique_violation — a ticket for that schedule+month+year already exists.
+      // Keep the original billing period in that case; anchor still updates below.
+      if (slideError && slideError.code !== '23505') {
+        console.error(`[complete] Failed to slide billing period for ticket ${id}:`, slideError)
+      }
+
+      if (current.pm_schedule_id) {
+        try {
+          await updateAnchorMonth(current.pm_schedule_id, completedMonth)
+        } catch (err) {
+          console.error(`[complete] Failed to update anchor for schedule ${current.pm_schedule_id}:`, err)
+        }
+      }
+
+      if (!slideError) {
+        return NextResponse.json({ ...updated, month: completedMonth, year: completedYear })
+      }
+    }
 
     return NextResponse.json(updated)
   } catch (err) {
