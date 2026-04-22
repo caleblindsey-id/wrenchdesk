@@ -22,8 +22,8 @@ import { useUser } from '@/components/UserProvider'
 
 const allNavItems = [
   { label: 'Dashboard', icon: LayoutDashboard, route: '/' },
-  { label: 'Tickets', icon: ClipboardList, route: '/tickets' },
-  { label: 'Service', icon: Headset, route: '/service' },
+  { label: 'Preventive Maintenance', icon: ClipboardList, route: '/tickets' },
+  { label: 'Service Tickets', icon: Headset, route: '/service' },
   { label: 'Equipment', icon: Wrench, route: '/equipment' },
   { label: 'Customers', icon: Building2, route: '/customers' },
   { label: 'Prospects', icon: UserRoundSearch, route: '/prospects' },
@@ -39,8 +39,8 @@ const adminNavItems = [
 
 const techNavItems = [
   { label: 'Dashboard', icon: LayoutDashboard, route: '/' },
-  { label: 'My Tickets', icon: ClipboardList, route: '/tickets' },
-  { label: 'Service', icon: Headset, route: '/service' },
+  { label: 'My PMs', icon: ClipboardList, route: '/tickets' },
+  { label: 'Service Tickets', icon: Headset, route: '/service' },
 ]
 
 interface SidebarProps {
