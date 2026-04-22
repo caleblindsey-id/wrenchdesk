@@ -55,7 +55,7 @@ export default async function TicketsPage({
         </div>
       )}
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Tickets</h1>
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Preventive Maintenance</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Monthly PM ticket board
         </p>
