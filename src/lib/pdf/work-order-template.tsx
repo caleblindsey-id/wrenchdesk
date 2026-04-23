@@ -456,10 +456,11 @@ export function CustomerWorkOrderDocument({ ticket, logoBase64 }: WorkOrderDocum
         {/* Header */}
         <View style={styles.header} fixed>
           <View style={styles.headerLeft}>
-            {logoBase64 && (
+            {logoBase64 ? (
               <Image src={logoBase64} style={styles.logo} />
+            ) : (
+              <Text style={styles.companyName}>{ticket.companyName}</Text>
             )}
-            <Text style={styles.companyName}>{ticket.companyName}</Text>
             <Text style={styles.subtitle}>Service Work Order</Text>
           </View>
           <View style={styles.headerRight}>
