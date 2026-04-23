@@ -23,6 +23,9 @@ interface PricingSummary {
 
 interface WorkOrderTicket {
   workOrderNumber: number
+  companyName: string
+  serviceEmail: string | null
+  servicePhone: string | null
   customerName: string
   accountNumber: string | null
   serviceLocation: string | null
@@ -73,6 +76,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1.5,
     borderBottomColor: '#111111',
     paddingBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerLeft: {
+    flexDirection: 'column',
+  },
+  headerRight: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    maxWidth: 240,
+  },
+  headerContactLine: {
+    fontSize: 9,
+    color: '#444444',
+    marginTop: 2,
+  },
+  headerTechLine: {
+    fontSize: 9,
+    color: '#111111',
+    fontFamily: 'Helvetica-Bold',
+    marginTop: 4,
   },
   logo: {
     width: 160,
@@ -81,7 +106,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   companyName: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Helvetica-Bold',
     color: '#111111',
     letterSpacing: 0.3,
@@ -389,10 +414,24 @@ export function CustomerWorkOrderDocument({ ticket, logoBase64 }: WorkOrderDocum
       <Page size="LETTER" style={styles.page} wrap>
         {/* Header */}
         <View style={styles.header} fixed>
-          {logoBase64 && (
-            <Image src={logoBase64} style={styles.logo} />
-          )}
-          <Text style={styles.subtitle}>Service Work Order</Text>
+          <View style={styles.headerLeft}>
+            {logoBase64 && (
+              <Image src={logoBase64} style={styles.logo} />
+            )}
+            <Text style={styles.companyName}>{ticket.companyName}</Text>
+            <Text style={styles.subtitle}>Service Work Order</Text>
+          </View>
+          <View style={styles.headerRight}>
+            {ticket.serviceEmail && (
+              <Text style={styles.headerContactLine}>{ticket.serviceEmail}</Text>
+            )}
+            {ticket.servicePhone && (
+              <Text style={styles.headerContactLine}>{ticket.servicePhone}</Text>
+            )}
+            {ticket.technicianName && ticket.technicianName !== '—' && (
+              <Text style={styles.headerTechLine}>Technician: {ticket.technicianName}</Text>
+            )}
+          </View>
         </View>
 
         {/* Work Order # */}
@@ -442,10 +481,6 @@ export function CustomerWorkOrderDocument({ ticket, logoBase64 }: WorkOrderDocum
 
         {/* Service Performed */}
         <Text style={styles.sectionLabel}>Service Performed</Text>
-        <View style={styles.fieldRow}>
-          <Text style={styles.fieldLabel}>Technician:</Text>
-          <Text style={styles.fieldValue}>{dash(ticket.technicianName)}</Text>
-        </View>
         <View style={styles.fieldRow}>
           <Text style={styles.fieldLabel}>Date Completed:</Text>
           <Text style={styles.fieldValue}>{dash(ticket.completedDate)}</Text>

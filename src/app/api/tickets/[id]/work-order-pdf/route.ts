@@ -159,6 +159,22 @@ export async function POST(
       ? (technicianEntry[0]?.name ?? '—')
       : (technicianEntry?.name ?? '—')
 
+    // Branding settings for the PDF header
+    const { data: brandingSettings } = await supabase
+      .from('settings')
+      .select('key, value')
+      .in('key', ['company_name', 'service_email', 'service_phone'])
+    const branding = Object.fromEntries(
+      (brandingSettings ?? []).map((s) => [s.key as string, s.value as string])
+    ) as Record<string, string | undefined>
+    const trimOrNull = (v: string | undefined) => {
+      const t = v?.trim()
+      return t && t.length > 0 ? t : null
+    }
+    const companyName = trimOrNull(branding.company_name) ?? 'Imperial Dade'
+    const serviceEmail = trimOrNull(branding.service_email)
+    const servicePhone = trimOrNull(branding.service_phone)
+
     // Load logo
     let logoBase64: string | null = null
     try {
@@ -205,6 +221,9 @@ export async function POST(
 
     const ticket = {
       workOrderNumber: raw.work_order_number as number,
+      companyName,
+      serviceEmail,
+      servicePhone,
       poNumber: raw.po_number as string | null,
       customerName: customer?.name ?? '—',
       accountNumber: customer?.account_number ?? null,

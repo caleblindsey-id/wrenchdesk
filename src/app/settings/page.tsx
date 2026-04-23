@@ -7,10 +7,13 @@ import SettingsContent from './SettingsContent'
 
 export default async function SettingsPage() {
   await requireRole('super_admin')
-  const [users, syncLog, laborRate] = await Promise.all([
+  const [users, syncLog, laborRate, companyName, serviceEmail, servicePhone] = await Promise.all([
     getUsers(),
     getSyncLog(),
     getSetting('labor_rate_per_hour'),
+    getSetting('company_name'),
+    getSetting('service_email'),
+    getSetting('service_phone'),
   ])
 
   return (
@@ -25,6 +28,9 @@ export default async function SettingsPage() {
         users={users}
         syncLog={syncLog}
         laborRate={laborRate ?? '75'}
+        companyName={companyName ?? ''}
+        serviceEmail={serviceEmail ?? ''}
+        servicePhone={servicePhone ?? ''}
       />
     </div>
   )

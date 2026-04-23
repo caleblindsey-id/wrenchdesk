@@ -11,9 +11,19 @@ interface SettingsContentProps {
   users: UserRow[]
   syncLog: SyncLogRow[]
   laborRate: string
+  companyName: string
+  serviceEmail: string
+  servicePhone: string
 }
 
-export default function SettingsContent({ users, syncLog, laborRate }: SettingsContentProps) {
+export default function SettingsContent({
+  users,
+  syncLog,
+  laborRate,
+  companyName,
+  serviceEmail,
+  servicePhone,
+}: SettingsContentProps) {
   const router = useRouter()
   const [modalOpen, setModalOpen] = useState(false)
 
@@ -21,6 +31,13 @@ export default function SettingsContent({ users, syncLog, laborRate }: SettingsC
     <>
       {/* System Settings */}
       <LaborRateSetting initialRate={laborRate} />
+
+      {/* Customer PDF Branding */}
+      <PdfBrandingSetting
+        initialCompanyName={companyName}
+        initialServiceEmail={serviceEmail}
+        initialServicePhone={servicePhone}
+      />
 
       {/* Users section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
@@ -316,6 +333,118 @@ function LaborRateSetting({ initialRate }: { initialRate: string }) {
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
           Used to calculate suggested billing amounts on ticket completion.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function PdfBrandingSetting({
+  initialCompanyName,
+  initialServiceEmail,
+  initialServicePhone,
+}: {
+  initialCompanyName: string
+  initialServiceEmail: string
+  initialServicePhone: string
+}) {
+  const [companyName, setCompanyName] = useState(initialCompanyName)
+  const [serviceEmail, setServiceEmail] = useState(initialServiceEmail)
+  const [servicePhone, setServicePhone] = useState(initialServicePhone)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSave() {
+    setSaving(true)
+    setSaved(false)
+    setError(null)
+    try {
+      const patches = [
+        { key: 'company_name', value: companyName },
+        { key: 'service_email', value: serviceEmail },
+        { key: 'service_phone', value: servicePhone },
+      ].map((body) =>
+        fetch('/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      )
+      const responses = await Promise.all(patches)
+      if (responses.every((r) => r.ok)) {
+        setSaved(true)
+      } else {
+        setError('One or more values failed to save.')
+      }
+    } catch {
+      setError('Could not save branding settings.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+          Customer PDF Branding
+        </h2>
+      </div>
+      <div className="px-5 py-4 space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Company Name
+          </label>
+          <input
+            type="text"
+            value={companyName}
+            onChange={(e) => { setCompanyName(e.target.value); setSaved(false) }}
+            placeholder="Imperial Dade"
+            className="w-full max-w-md rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Service Email
+          </label>
+          <input
+            type="email"
+            value={serviceEmail}
+            onChange={(e) => { setServiceEmail(e.target.value); setSaved(false) }}
+            placeholder="service@example.com"
+            className="w-full max-w-md rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Service Phone
+          </label>
+          <input
+            type="text"
+            value={servicePhone}
+            onChange={(e) => { setServicePhone(e.target.value); setSaved(false) }}
+            placeholder="(205) 555-1234"
+            className="w-full max-w-md rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
+          />
+        </div>
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-md hover:bg-slate-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+          {saved && (
+            <span className="text-sm text-green-600 font-medium">Saved</span>
+          )}
+          {error && (
+            <span className="text-sm text-red-600 font-medium">{error}</span>
+          )}
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Shown in the header of the customer PM work order PDF. Leave email or phone blank to omit those rows.
         </p>
       </div>
     </div>
