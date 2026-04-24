@@ -1,8 +1,8 @@
-# WrenchDesk — Register nightly sync in Windows Task Scheduler
+# CallBoard - Register nightly sync in Windows Task Scheduler
 # RIGHT-CLICK this file and select "Run as administrator"
 
-$taskName = "WrenchDesk - Nightly Synergy Sync"
-$legacyTaskName = "PM Scheduler - Nightly Synergy Sync"
+$taskName = "CallBoard - Nightly Synergy Sync"
+$legacyTaskName = "WrenchDesk - Nightly Synergy Sync"
 $scriptPath = "$PSScriptRoot\run-sync.ps1"
 
 # Clean up legacy task from the pre-rename era if present

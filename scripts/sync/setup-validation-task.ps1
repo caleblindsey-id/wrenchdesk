@@ -1,8 +1,8 @@
-# WrenchDesk - Register Synergy Order Validation in Task Scheduler
+# CallBoard - Register Synergy Order Validation in Task Scheduler
 # Run once as administrator to set up the nightly validation job.
 
-$taskName       = "WrenchDesk - Validate Synergy Orders"
-$legacyTaskName = "PM Scheduler - Validate Synergy Orders"
+$taskName       = "CallBoard - Validate Synergy Orders"
+$legacyTaskName = "WrenchDesk - Validate Synergy Orders"
 $description = "Nightly validation of service ticket Synergy order numbers against ERP (roh table)"
 $scriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $runScript   = Join-Path $scriptDir "run-validation.ps1"

@@ -1,6 +1,6 @@
-# WrenchDesk — Nightly Synergy Sync
+# CallBoard — Nightly Synergy Sync
 
-Reads customers, contacts, and products from SynergyERP (MySQL 5.5) and upserts them to the WrenchDesk Supabase database via REST API. Runs nightly at 5 AM, after Synergy's own overnight refresh completes (~2 AM start, ~2 hour run).
+Reads customers, contacts, and products from SynergyERP (MySQL 5.5) and upserts them to the CallBoard Supabase database via REST API. Runs nightly at 5 AM, after Synergy's own overnight refresh completes (~2 AM start, ~2 hour run).
 
 ---
 
@@ -8,7 +8,7 @@ Reads customers, contacts, and products from SynergyERP (MySQL 5.5) and upserts 
 
 - Python 3.9 or later
 - ODBC DSN `ERPlinked` configured on this workstation (already set up)
-- Supabase project with the WrenchDesk schema applied
+- Supabase project with the CallBoard schema applied
 - Required Python packages:
 
 ```
@@ -79,14 +79,14 @@ The script exits with code `0` on success and `1` if any sync type fails. Check 
 
 Each script:
 - Removes any pre-rename `PM Scheduler - *` task with the matching role
-- Registers the task as `WrenchDesk - *` pointing at the current folder location
+- Registers the task as `CallBoard - *` pointing at the current folder location
 - Uses `$PSScriptRoot` so it works from whatever path you run it from — re-run after folder renames without code changes
 
 **Manual fallback** (only if the setup scripts won't run):
 
 1. Open **Task Scheduler**
 2. Click **Create Basic Task**
-3. **Name:** `WrenchDesk - Nightly Synergy Sync`
+3. **Name:** `CallBoard - Nightly Synergy Sync`
 4. **Trigger:** Daily at **5:00 AM**
 5. **Action → Start a program:**
    - **Program/script:** `powershell.exe`
@@ -101,7 +101,7 @@ Test with right-click → **Run**.
 
 - **Logs directory:** `<repo root>/logs/sync-YYYY-MM-DD.log` — one file per day, written by both the script and the PowerShell wrapper
 - **Supabase sync_log table:** Each run writes a row with `sync_type`, `started_at`, `completed_at`, `records_synced`, `status`, and `error_message`
-- **App dashboard:** The Sync Status Banner in the WrenchDesk app reads from the `sync_log` table
+- **App dashboard:** The Sync Status Banner in the CallBoard app reads from the `sync_log` table
 
 ---
 

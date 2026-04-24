@@ -1,8 +1,8 @@
-# WrenchDesk - Register Equipment-Sale Lead Candidate Scan in Task Scheduler
+# CallBoard - Register Equipment-Sale Lead Candidate Scan in Task Scheduler
 # Run once to set up the nightly scan job.
 
-$taskName       = "WrenchDesk - Equipment Sale Scan"
-$legacyTaskName = "PM Scheduler - Equipment Sale Scan"
+$taskName       = "CallBoard - Equipment Sale Scan"
+$legacyTaskName = "WrenchDesk - Equipment Sale Scan"
 $description = "Nightly scan of Synergy for equipment-sale lead candidate matches + 90-day expiration sweep on tech_leads"
 $scriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $runScript   = Join-Path $scriptDir "run-equipment-sale-scan.ps1"
