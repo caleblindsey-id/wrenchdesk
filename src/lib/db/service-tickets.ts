@@ -186,6 +186,7 @@ export async function getPartsOnOrderCount(technicianId?: string): Promise<numbe
   const pmQuery = supabase
     .from('pm_tickets')
     .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
     .filter('parts_requested', 'cs', JSON.stringify([{ status: 'ordered' }]))
     .not('status', 'in', '("completed","billed","skipped","skip_requested")')
   if (technicianId) {
@@ -213,6 +214,7 @@ export async function getPartsReadyForPickupCount(technicianId?: string): Promis
   const pmQuery = supabase
     .from('pm_tickets')
     .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
     .filter('parts_requested', 'cs', JSON.stringify([{ status: 'received' }]))
     .not('status', 'in', '("completed","billed","skipped","skip_requested")')
   if (technicianId) {

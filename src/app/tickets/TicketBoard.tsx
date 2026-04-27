@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, ChevronDown, AlertOctagon, AlertTriangle } from 'lucide-react'
+import { ChevronRight, ChevronDown, AlertOctagon, AlertTriangle, Trash2, RotateCcw } from 'lucide-react'
 import { TicketWithJoins } from '@/lib/db/tickets'
 import { UserRow, TicketStatus, MANAGER_ROLES } from '@/types/database'
 import StatusBadge, { OverdueBadge } from '@/components/StatusBadge'
@@ -38,6 +38,7 @@ interface TicketBoardProps {
   initialStatus?: string
   overdueMode?: boolean
   skipRequestedMode?: boolean
+  deletedMode?: boolean
 }
 
 interface TicketListProps {
@@ -48,6 +49,9 @@ interface TicketListProps {
   onToggleAll: () => void
   showOverdueBadges?: boolean
   emptyMessage: string
+  deletedMode?: boolean
+  onRestore?: (id: string) => void
+  restoringId?: string | null
 }
 
 function TicketList({
@@ -58,6 +62,9 @@ function TicketList({
   onToggleAll,
   showOverdueBadges = false,
   emptyMessage,
+  deletedMode = false,
+  onRestore,
+  restoringId,
 }: TicketListProps) {
   const router = useRouter()
   if (tickets.length === 0) {
@@ -78,7 +85,7 @@ function TicketList({
               key={ticket.id}
               className={`px-4 py-3 cursor-pointer active:bg-gray-50 dark:active:bg-gray-700 ${
                 showOverdueBadges ? 'border-l-4 border-red-400 dark:border-red-600' : ''
-              }`}
+              } ${deletedMode ? 'opacity-60' : ''}`}
               onClick={() => router.push(`/tickets/${ticket.id}`)}
             >
               <div className="flex items-center justify-between mb-1">
@@ -89,6 +96,11 @@ function TicketList({
                   <StatusBadge status={ticket.status} />
                   {showOverdueBadges && <OverdueBadge days={days} />}
                   {ticket.customers?.credit_hold && <CreditHoldBadge />}
+                  {deletedMode && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                      <Trash2 className="h-3 w-3" /> Deleted
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 min-w-0">
                   <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
@@ -115,6 +127,19 @@ function TicketList({
                   <> · City: {ticket.equipment?.ship_to_locations?.city ?? ticket.customers?.billing_city}</>
                 )}
               </p>
+              {deletedMode && isManager && onRestore && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRestore(ticket.id)
+                  }}
+                  disabled={restoringId === ticket.id}
+                  className="mt-2 inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-200 bg-white dark:bg-gray-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-gray-600 disabled:opacity-50 min-h-[44px]"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {restoringId === ticket.id ? 'Restoring...' : 'Restore'}
+                </button>
+              )}
             </div>
           )
         })}
@@ -124,7 +149,7 @@ function TicketList({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              {isManager && (
+              {isManager && !deletedMode && (
                 <th className="px-4 py-3 text-left">
                   <input
                     type="checkbox"
@@ -143,6 +168,9 @@ function TicketList({
                 {showOverdueBadges ? 'Scheduled' : 'Scheduled Date'}
               </th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-400">Technician</th>
+              {deletedMode && isManager && (
+                <th className="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-400">Action</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -153,10 +181,10 @@ function TicketList({
                   key={ticket.id}
                   className={`hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer ${
                     showOverdueBadges ? 'border-l-4 border-red-400 dark:border-red-600' : ''
-                  }`}
+                  } ${deletedMode ? 'opacity-60' : ''}`}
                   onClick={() => router.push(`/tickets/${ticket.id}`)}
                 >
-                  {isManager && (
+                  {isManager && !deletedMode && (
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
@@ -199,6 +227,18 @@ function TicketList({
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
                     {ticket.users?.name ?? '—'}
                   </td>
+                  {deletedMode && isManager && (
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => onRestore?.(ticket.id)}
+                        disabled={restoringId === ticket.id}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-800 dark:text-slate-200 bg-white dark:bg-gray-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        {restoringId === ticket.id ? 'Restoring...' : 'Restore'}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               )
             })}
@@ -219,6 +259,7 @@ export default function TicketBoard({
   initialStatus = '',
   overdueMode = false,
   skipRequestedMode = false,
+  deletedMode = false,
 }: TicketBoardProps) {
   const isManager = !!userRole && MANAGER_ROLES.includes(userRole)
   const router = useRouter()
@@ -238,6 +279,23 @@ export default function TicketBoard({
   const [skipOpen, setSkipOpen] = useState(false)
   const [skipSource, setSkipSource] = useState<'month' | 'overdue'>('month')
   const [error, setError] = useState<string | null>(null)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+
+  async function handleRestore(id: string) {
+    setRestoringId(id)
+    setError(null)
+    try {
+      const res = await fetch(`/api/tickets/${id}/restore`, { method: 'POST' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? 'Failed to restore ticket')
+        return
+      }
+      router.refresh()
+    } finally {
+      setRestoringId(null)
+    }
+  }
 
   const activeSelected = skipSource === 'overdue' ? overdueSelected : selected
   const activeList = skipSource === 'overdue' ? overdueTickets : tickets
@@ -357,6 +415,23 @@ export default function TicketBoard({
         </div>
       )}
 
+      {deletedMode && (
+        <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Trash2 className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            <span>
+              Showing deleted tickets for {MONTHS[month - 1]} {year} ({tickets.length}). Deleted PMs are blocked from regeneration.
+            </span>
+          </div>
+          <button
+            onClick={() => router.push(`/tickets?month=${month}&year=${year}`)}
+            className="text-xs font-medium underline hover:no-underline"
+          >
+            Hide deleted
+          </button>
+        </div>
+      )}
+
       {/* Filters — hidden when viewing overdue-only or skip-requested-only */}
       {!overdueMode && !skipRequestedMode && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
@@ -418,7 +493,7 @@ export default function TicketBoard({
             >
               Apply
             </button>
-            {isManager && (
+            {isManager && !deletedMode && (
               <div className="w-full lg:w-auto lg:ml-auto flex gap-2">
                 <button
                   onClick={() => setCreateOpen(true)}
@@ -431,6 +506,14 @@ export default function TicketBoard({
                   className="w-full lg:w-auto px-4 py-2.5 lg:py-1.5 text-sm font-medium text-slate-800 dark:text-slate-200 bg-white dark:bg-gray-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-gray-600 transition-colors min-h-[44px] lg:min-h-0"
                 >
                   Generate {MONTHS[month - 1]} PMs
+                </button>
+                <button
+                  onClick={() => router.push(`/tickets?month=${month}&year=${year}&deleted=1`)}
+                  title="View tickets that were deleted in this month"
+                  className="w-full lg:w-auto px-3 py-2.5 lg:py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors min-h-[44px] lg:min-h-0 inline-flex items-center justify-center gap-1"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Deleted
                 </button>
               </div>
             )}
@@ -445,7 +528,7 @@ export default function TicketBoard({
       )}
 
       {/* Bulk-assign bar — reflects whichever list has a selection */}
-      {isManager && (selected.size > 0 || overdueSelected.size > 0) && (
+      {isManager && !deletedMode && (selected.size > 0 || overdueSelected.size > 0) && (
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <span className="text-sm text-blue-800 dark:text-blue-300 font-medium">
             {activeSelected.size} {skipSource === 'overdue' ? 'overdue ' : ''}ticket{activeSelected.size > 1 ? 's' : ''} selected
@@ -536,7 +619,10 @@ export default function TicketBoard({
               setSkipSource('month')
               toggleAll()
             }}
-            emptyMessage="No tickets found for the selected filters."
+            emptyMessage={deletedMode ? 'No deleted tickets for the selected filters.' : 'No tickets found for the selected filters.'}
+            deletedMode={deletedMode}
+            onRestore={handleRestore}
+            restoringId={restoringId}
           />
         </div>
       )}

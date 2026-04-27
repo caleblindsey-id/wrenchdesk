@@ -234,6 +234,7 @@ export async function getTeamAnalytics(
   const { data: currentTickets, error: curErr } = await supabase
     .from('pm_tickets')
     .select('assigned_technician_id, status, billing_amount, hours_worked, additional_hours_worked, additional_parts_used, completed_date, scheduled_date')
+    .is('deleted_at', null)
     .gte('completed_date', range.start)
     .lte('completed_date', range.end + 'T23:59:59Z')
 
@@ -242,6 +243,7 @@ export async function getTeamAnalytics(
   const { data: priorTickets, error: priorErr } = await supabase
     .from('pm_tickets')
     .select('assigned_technician_id, status, billing_amount, hours_worked, additional_hours_worked, additional_parts_used, completed_date, scheduled_date')
+    .is('deleted_at', null)
     .gte('completed_date', priorRange.start)
     .lte('completed_date', priorRange.end + 'T23:59:59Z')
 
@@ -252,6 +254,7 @@ export async function getTeamAnalytics(
   const { data: allStatusTickets } = await supabase
     .from('pm_tickets')
     .select('assigned_technician_id, status')
+    .is('deleted_at', null)
     .eq('month', curDate.getUTCMonth() + 1)
     .eq('year', curDate.getUTCFullYear())
 
@@ -359,6 +362,7 @@ export async function getTeamAnalytics(
   const { data: trendTickets } = await supabase
     .from('pm_tickets')
     .select('assigned_technician_id, status, billing_amount, hours_worked, additional_hours_worked, completed_date')
+    .is('deleted_at', null)
     .in('status', ['completed', 'billed'])
     .gte('completed_date', trendStartStr)
     .order('completed_date', { ascending: false })
@@ -456,6 +460,7 @@ export async function getTechnicianAnalytics(
   const { data: allTickets, error: tickErr } = await supabase
     .from('pm_tickets')
     .select('assigned_technician_id, status, billing_amount, hours_worked, additional_hours_worked, additional_parts_used, completed_date, scheduled_date')
+    .is('deleted_at', null)
     .eq('assigned_technician_id', techId)
     .gte('completed_date', trendStartStr)
     .order('completed_date', { ascending: false })
@@ -467,6 +472,7 @@ export async function getTechnicianAnalytics(
   const { data: allStatusTickets } = await supabase
     .from('pm_tickets')
     .select('assigned_technician_id, status')
+    .is('deleted_at', null)
     .eq('assigned_technician_id', techId)
     .eq('month', curDate.getUTCMonth() + 1)
     .eq('year', curDate.getUTCFullYear())
@@ -533,6 +539,7 @@ export async function getTechnicianAnalytics(
   const { data: ticketsWithSchedule } = await supabase
     .from('pm_tickets')
     .select('id, billing_amount, additional_hours_worked, additional_parts_used, pm_schedules(flat_rate)')
+    .is('deleted_at', null)
     .eq('assigned_technician_id', techId)
     .in('status', ['completed', 'billed'])
     .gte('completed_date', range.start)
@@ -556,6 +563,7 @@ export async function getTechnicianAnalytics(
   const { data: recentRaw } = await supabase
     .from('pm_tickets')
     .select('id, work_order_number, completed_date, hours_worked, additional_hours_worked, billing_amount, status, customers(name)')
+    .is('deleted_at', null)
     .eq('assigned_technician_id', techId)
     .in('status', ['completed', 'billed', 'in_progress', 'assigned'])
     .order('completed_date', { ascending: false, nullsFirst: false })

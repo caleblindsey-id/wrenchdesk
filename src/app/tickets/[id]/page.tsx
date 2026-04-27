@@ -7,6 +7,7 @@ import StatusBadge from '@/components/StatusBadge'
 import CreditHoldBadge from '@/components/CreditHoldBadge'
 import TicketActions from './TicketActions'
 import PmPartsSection from './PmPartsSection'
+import DeletedBanner from './DeletedBanner'
 import ServiceHistory from '@/components/ServiceHistory'
 import EquipmentNotes from '@/components/EquipmentNotes'
 import { getCurrentUser, isTechnician } from '@/lib/auth'
@@ -32,6 +33,14 @@ export default async function TicketDetailPage({
   if (isTechnician(user?.role ?? null) && ticket.assigned_technician_id !== user?.id) {
     notFound()
   }
+
+  // Techs never see deleted tickets — only managers can review/restore them.
+  if (ticket.deleted_at && isTechnician(user?.role ?? null)) {
+    notFound()
+  }
+
+  const isDeleted = !!ticket.deleted_at
+  const canRestore = !isTechnician(user?.role ?? null) && RESET_ROLES.includes(user?.role ?? ('' as never))
 
   const laborRate = laborRateStr ? parseFloat(laborRateStr) : 75
 
@@ -68,6 +77,15 @@ export default async function TicketDetailPage({
           <StatusBadge status={ticket.status} />
         </div>
       </div>
+
+      {isDeleted && (
+        <DeletedBanner
+          ticketId={ticket.id}
+          deletedAt={ticket.deleted_at!}
+          deletedByName={ticket.deleted_by?.name ?? null}
+          canRestore={canRestore}
+        />
+      )}
 
       {ticket.customers?.credit_hold && (
         <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-800 rounded-lg p-4 flex items-center gap-3">
@@ -201,23 +219,26 @@ export default async function TicketDetailPage({
         </div>
       </div>
 
-      {/* Parts tracking */}
-      <PmPartsSection
-        ticketId={ticket.id}
-        initialPartsRequested={ticket.parts_requested ?? []}
-        initialSynergyOrderNumber={ticket.synergy_order_number ?? null}
-        isTech={isTechnician(user?.role ?? null)}
-        canReset={RESET_ROLES.includes(user?.role ?? ('' as never))}
-        status={ticket.status}
-      />
+      {/* Parts tracking + Actions are hidden when the ticket is deleted (read-only) */}
+      {!isDeleted && (
+        <>
+          <PmPartsSection
+            ticketId={ticket.id}
+            initialPartsRequested={ticket.parts_requested ?? []}
+            initialSynergyOrderNumber={ticket.synergy_order_number ?? null}
+            isTech={isTechnician(user?.role ?? null)}
+            canReset={RESET_ROLES.includes(user?.role ?? ('' as never))}
+            status={ticket.status}
+          />
 
-      {/* Action section */}
-      <TicketActions
-        ticket={ticket}
-        userRole={user?.role ?? null}
-        userId={user?.id ?? null}
-        laborRate={laborRate}
-      />
+          <TicketActions
+            ticket={ticket}
+            userRole={user?.role ?? null}
+            userId={user?.id ?? null}
+            laborRate={laborRate}
+          />
+        </>
+      )}
 
       {/* Service History */}
       {ticket.equipment_id && (

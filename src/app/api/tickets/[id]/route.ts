@@ -114,6 +114,7 @@ export async function PATCH(
         .from('pm_tickets')
         .select('status, assigned_technician_id')
         .eq('id', id)
+        .is('deleted_at', null)
         .single()
 
       if (fetchError || !current) {
@@ -305,32 +306,21 @@ export async function DELETE(
 
     const supabase = await createClient()
 
-    // Fetch ticket to get photos for cleanup
-    const { data: ticket, error: fetchError } = await supabase
+    // Soft-delete: leaves the row in place so the PM generator's (pm_schedule_id, month, year)
+    // dedup query continues to block regeneration. Photos are kept so Restore returns a
+    // complete ticket. A future purge job can hard-delete + clean storage after N days.
+    const { data: updated, error: updateError } = await supabase
       .from('pm_tickets')
-      .select('id, photos')
+      .update({ deleted_at: new Date().toISOString(), deleted_by_id: user.id })
       .eq('id', id)
-      .single()
+      .is('deleted_at', null)
+      .select('id')
+      .maybeSingle()
 
-    if (fetchError || !ticket) {
+    if (updateError) throw updateError
+    if (!updated) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
     }
-
-    // Clean up photos from Supabase Storage
-    const photos = (ticket.photos ?? []) as { storage_path: string }[]
-    if (photos.length > 0) {
-      await supabase.storage
-        .from('ticket-photos')
-        .remove(photos.map((p) => p.storage_path))
-    }
-
-    // Delete the ticket
-    const { error: deleteError } = await supabase
-      .from('pm_tickets')
-      .delete()
-      .eq('id', id)
-
-    if (deleteError) throw deleteError
 
     return NextResponse.json({ success: true })
   } catch (err) {

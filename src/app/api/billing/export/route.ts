@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
       .eq('billing_exported', false)
       .eq('month', month)
       .eq('year', year)
+      .is('deleted_at', null)
       .order('customer_id')
 
     if (error) throw error

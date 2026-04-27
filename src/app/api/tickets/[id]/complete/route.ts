@@ -73,6 +73,7 @@ export async function POST(
       .from('pm_tickets')
       .select('status, assigned_technician_id, parts_requested, month, year, pm_schedule_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single()
 
     if (fetchError || !current) {

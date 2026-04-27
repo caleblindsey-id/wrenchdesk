@@ -51,6 +51,7 @@ export default async function EquipmentPage() {
       .from('pm_tickets')
       .select('equipment_id, completed_date, status, month, year')
       .in('equipment_id', equipmentIds)
+      .is('deleted_at', null)
       .order('completed_date', { ascending: false })
 
     for (const t of tickets ?? []) {

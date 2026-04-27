@@ -14,6 +14,7 @@ export type TicketDetail = PmTicketRow & {
   equipment: { make: string | null; model: string | null; serial_number: string | null; default_products: { synergy_product_id: number; quantity: number; description: string }[]; ship_to_locations: { name: string | null; address: string | null; city: string | null; state: string | null; zip: string | null } | null } | null
   assigned_technician: { name: string } | null
   created_by: { name: string } | null
+  deleted_by: { name: string } | null
   schedule: { billing_type: BillingType | null; flat_rate: number | null } | null
 }
 
@@ -25,6 +26,8 @@ export async function getTickets(filters?: {
   customerId?: number
   overdueOnly?: boolean
   now?: Date
+  includeDeleted?: boolean
+  deletedOnly?: boolean
 }): Promise<TicketWithJoins[]> {
   const supabase = await createClient()
 
@@ -38,6 +41,12 @@ export async function getTickets(filters?: {
       pm_schedules(interval_months, anchor_month)
     `)
     .order('created_at', { ascending: false })
+
+  if (filters?.deletedOnly) {
+    query = query.not('deleted_at', 'is', null)
+  } else if (!filters?.includeDeleted) {
+    query = query.is('deleted_at', null)
+  }
 
   if (filters?.overdueOnly) {
     const now = filters.now ?? new Date()
@@ -93,6 +102,7 @@ export async function getBillingTickets(
       pm_schedules(interval_months, anchor_month)
     `)
     .eq('status', 'completed')
+    .is('deleted_at', null)
     .gte('completed_date', startDate)
     .lt('completed_date', endDate)
     .order('completed_date', { ascending: false })
@@ -113,6 +123,7 @@ export async function getOverdueTicketCount(filters?: {
   let query = supabase
     .from('pm_tickets')
     .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
     .in('status', OVERDUE_ELIGIBLE_STATUSES)
     .or(`year.lt.${currentYear},and(year.eq.${currentYear},month.lt.${currentMonth})`)
 
@@ -133,6 +144,7 @@ export async function getSkipRequestedCount(filters?: {
   let query = supabase
     .from('pm_tickets')
     .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null)
     .eq('status', 'skip_requested')
 
   if (filters?.technicianId) {
@@ -155,6 +167,7 @@ export async function getTicket(id: string): Promise<TicketDetail | null> {
       equipment(make, model, serial_number, default_products, ship_to_locations(name, address, city, state, zip)),
       assigned_technician:users!assigned_technician_id(name),
       created_by:users!created_by_id(name),
+      deleted_by:users!deleted_by_id(name),
       schedule:pm_schedules(billing_type, flat_rate)
     `)
     .eq('id', id)
@@ -174,10 +187,12 @@ export async function updateTicket(
 ): Promise<PmTicketRow> {
   const supabase = await createClient()
 
+  // Soft-deleted tickets are read-only. Restore goes through /api/tickets/[id]/restore.
   const { data: updated, error } = await supabase
     .from('pm_tickets')
     .update(data)
     .eq('id', id)
+    .is('deleted_at', null)
     .select()
     .single()
 
@@ -230,6 +245,7 @@ export async function completeTicket(
       date_code: data.dateCode,
     })
     .eq('id', id)
+    .is('deleted_at', null)
     .select()
     .single()
 
@@ -245,6 +261,7 @@ export async function getTicketsByMonth(month: number, year: number): Promise<Pm
     .select('*')
     .eq('month', month)
     .eq('year', year)
+    .is('deleted_at', null)
     .order('created_at')
 
   if (error) throw error
@@ -265,6 +282,7 @@ export async function bulkAssignTechnician(
     })
     .in('id', ticketIds)
     .in('status', ['unassigned', 'assigned'])
+    .is('deleted_at', null)
     .select()
 
   if (error) throw error

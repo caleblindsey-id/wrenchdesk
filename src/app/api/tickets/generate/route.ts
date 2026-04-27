@@ -63,7 +63,9 @@ export async function POST(request: NextRequest) {
 
     const schedules = rawSchedules as ScheduleWithEquipment[]
 
-    // Fetch all existing tickets for this month/year in one query to avoid N+1
+    // Fetch all existing tickets for this month/year in one query to avoid N+1.
+    // IMPORTANT: this query intentionally does NOT filter deleted_at — soft-deleted
+    // rows must still block regeneration, which is the whole point of soft-delete.
     const { data: existingTickets, error: existingError } = await supabase
       .from('pm_tickets')
       .select('pm_schedule_id, equipment_id')
@@ -172,6 +174,7 @@ export async function POST(request: NextRequest) {
         .select('id, month, year')
         .in('pm_schedule_id', scheduleIdsToCreate)
         .eq('status', 'unassigned')
+        .is('deleted_at', null)
 
       const orphanIds = (candidateOrphans ?? [])
         .filter(t => t.month !== month || t.year !== year)

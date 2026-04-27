@@ -49,6 +49,7 @@ export async function POST(
         technician:users!assigned_technician_id(name)
       `)
       .eq('id', id)
+      .is('deleted_at', null)
       .single()
 
     if (fetchError || !raw) {

@@ -91,6 +91,7 @@ export async function getEquipmentDetail(id: string): Promise<EquipmentDetail | 
     .from('pm_tickets')
     .select('*')
     .eq('equipment_id', id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(12)
 
@@ -112,6 +113,7 @@ export async function getEquipmentServiceHistory(
     .from('pm_tickets')
     .select('*')
     .eq('equipment_id', equipmentId)
+    .is('deleted_at', null)
     .in('status', ['completed', 'billed'])
     .order('completed_date', { ascending: false })
 
@@ -258,6 +260,7 @@ export async function getInactiveEquipmentProspects(): Promise<InactiveEquipment
     .from('pm_tickets')
     .select('equipment_id, completed_date, billing_amount, assigned_technician_id')
     .in('equipment_id', equipmentIds)
+    .is('deleted_at', null)
     .in('status', ['completed', 'billed'])
     .order('completed_date', { ascending: false })
 

@@ -205,6 +205,7 @@ export async function POST(request: NextRequest) {
       `)
       .in('id', ticketIds as string[])
       .eq('status', 'completed')
+      .is('deleted_at', null)
 
     if (ticketsError) {
       console.error('[billing/pdf] Supabase fetch error:', ticketsError)
