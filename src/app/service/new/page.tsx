@@ -1,5 +1,4 @@
-import { requireRole } from '@/lib/auth'
-import { MANAGER_ROLES } from '@/types/database'
+import { requireRole, MANAGER_ROLES } from '@/lib/auth'
 import { CreateServiceTicketForm } from './CreateServiceTicketForm'
 
 export default async function NewServiceTicketPage() {

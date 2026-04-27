@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser, isTechnician } from '@/lib/auth'
-import { MANAGER_ROLES } from '@/types/database'
+import { getCurrentUser, isTechnician, MANAGER_ROLES } from '@/lib/auth'
 import { getServiceTickets } from '@/lib/db/service-tickets'
 import type { ServiceTicketStatus, ServicePriority, ServiceTicketType, ServiceBillingType } from '@/types/service-tickets'
 

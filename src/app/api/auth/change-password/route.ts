@@ -22,7 +22,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 400 })
     }
 
-    // Clear the must_change_password flag using admin client (bypasses RLS)
+    // Clear the must_change_password flag using admin client (bypasses RLS).
+    // Always clear the proxy cookie even if the DB write fails — otherwise the
+    // user would be redirect-looped back to /change-password but Supabase rejects
+    // re-using the same password ("must be different from old password").
+    const cookieStore = await cookies()
+    cookieStore.set('pm-must-change-pw', 'false', {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 300,
+    })
+
     const admin = createAdminClient()
     const { error: dbError } = await admin
       .from('users')
@@ -31,16 +43,11 @@ export async function POST(request: NextRequest) {
 
     if (dbError) {
       console.error('Failed to clear must_change_password:', dbError)
-      return NextResponse.json({ error: 'Password updated but failed to clear change flag. Please contact an administrator.' }, { status: 500 })
+      return NextResponse.json(
+        { error: 'Password updated but the change-required flag could not be cleared. Please contact an administrator.' },
+        { status: 500 }
+      )
     }
-
-    // Clear the proxy cookie so the user isn't redirected back
-    const cookieStore = await cookies()
-    cookieStore.set('pm-must-change-pw', 'false', {
-      httpOnly: true,
-      sameSite: 'strict',
-      path: '/',
-    })
 
     return NextResponse.json({ success: true })
   } catch (err) {

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { UserRow, UserRole, SyncLogRow } from '@/types/database'
 import { useUser } from '@/components/UserProvider'
 import { X } from 'lucide-react'
@@ -161,36 +160,46 @@ function UserTableRow({ user }: { user: UserRow }) {
   const [savingCost, setSavingCost] = useState(false)
   const [savingRole, setSavingRole] = useState(false)
 
+  const [error, setError] = useState<string | null>(null)
+
+  async function patchUser(body: Record<string, unknown>): Promise<boolean> {
+    setError(null)
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error || 'Failed to update user.')
+      return false
+    }
+    return true
+  }
+
   async function handleRoleChange(newRole: UserRole) {
     if (newRole === user.role) return
     setSavingRole(true)
-    const supabase = createClient()
-    await supabase.from('users').update({ role: newRole }).eq('id', user.id)
+    const ok = await patchUser({ role: newRole })
     setSavingRole(false)
-    router.refresh()
+    if (ok) router.refresh()
   }
 
   async function handleToggleActive() {
     setLoading(true)
-    const supabase = createClient()
-    await supabase
-      .from('users')
-      .update({ active: !user.active } )
-      .eq('id', user.id)
+    const ok = await patchUser({ active: !user.active })
     setLoading(false)
-    router.refresh()
+    if (ok) router.refresh()
   }
 
   async function handleSaveCost() {
     setSavingCost(true)
-    const supabase = createClient()
-    await supabase
-      .from('users')
-      .update({ hourly_cost: hourlyCost ? parseFloat(hourlyCost) : null } )
-      .eq('id', user.id)
+    const ok = await patchUser({ hourly_cost: hourlyCost ? parseFloat(hourlyCost) : null })
     setSavingCost(false)
-    setEditingCost(false)
-    router.refresh()
+    if (ok) {
+      setEditingCost(false)
+      router.refresh()
+    }
   }
 
   return (
@@ -266,13 +275,20 @@ function UserTableRow({ user }: { user: UserRow }) {
         </span>
       </td>
       <td className="px-5 py-3">
-        <button
-          onClick={handleToggleActive}
-          disabled={loading}
-          className="text-sm font-medium text-slate-700 hover:text-slate-900 disabled:opacity-50"
-        >
-          {loading ? '...' : user.active ? 'Deactivate' : 'Activate'}
-        </button>
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={handleToggleActive}
+            disabled={loading}
+            className="text-sm font-medium text-slate-700 hover:text-slate-900 disabled:opacity-50 text-left"
+          >
+            {loading ? '...' : user.active ? 'Deactivate' : 'Activate'}
+          </button>
+          {error && (
+            <span className="text-xs text-red-600 dark:text-red-400" role="alert">
+              {error}
+            </span>
+          )}
+        </div>
       </td>
     </tr>
   )

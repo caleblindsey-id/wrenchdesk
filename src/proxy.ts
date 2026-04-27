@@ -9,13 +9,15 @@ const TECH_ALLOWED_PAGE_PATTERNS = [
   /^\/service\/[^/]+$/,    // /service/[id] — own assigned service tickets
 ]
 
-// API routes technicians are allowed to access
+// API routes technicians are allowed to access.
+// IMPORTANT: patterns anchored with $ or trailing-slash to avoid matching flat
+// sibling routes like /api/tickets/bulk-delete or /api/tickets/generate.
 const TECH_ALLOWED_API_PATTERNS = [
-  /^\/api\/auth\//,                      // Self-service auth (change-password) — all roles
-  /^\/api\/tickets\/[^/]+/,              // PATCH /api/tickets/[id] and POST /api/tickets/[id]/complete
-  /^\/api\/service-tickets(\/|$)/,       // GET /api/service-tickets + /api/service-tickets/[id]/*
-  /^\/api\/equipment\/[^/]+\/notes$/,    // GET + POST /api/equipment/[id]/notes
-  /^\/api\/tech-leads(\/|$)/,            // POST /api/tech-leads (Submit Lead modal)
+  /^\/api\/auth\//,                                          // Self-service auth (change-password) — all roles
+  /^\/api\/tickets\/[0-9a-f-]{36}(\/|$)/i,                   // PATCH /api/tickets/[uuid] and /api/tickets/[uuid]/complete
+  /^\/api\/service-tickets(\/|$)/,                           // GET /api/service-tickets + /api/service-tickets/[id]/*
+  /^\/api\/equipment\/[^/]+\/notes$/,                        // GET + POST /api/equipment/[id]/notes
+  /^\/api\/tech-leads(\/|$)/,                                // POST /api/tech-leads (Submit Lead modal)
 ]
 
 function isTechAllowed(pathname: string): boolean {
@@ -23,6 +25,14 @@ function isTechAllowed(pathname: string): boolean {
   if (TECH_ALLOWED_PAGE_PATTERNS.some((p) => p.test(pathname))) return true
   if (TECH_ALLOWED_API_PATTERNS.some((p) => p.test(pathname))) return true
   return false
+}
+
+const PM_COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: 'strict' as const,
+  secure: process.env.NODE_ENV === 'production',
+  path: '/',
+  maxAge: 300, // 5 minutes — bounds role/forced-change staleness across role demotions
 }
 
 export async function proxy(request: NextRequest) {
@@ -53,12 +63,13 @@ export async function proxy(request: NextRequest) {
     }
   )
 
+  // Server-validated user (network call to Supabase Auth) — rejects revoked sessions.
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
   // Redirect unauthenticated users to login
-  if (!session) {
+  if (!user) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -70,22 +81,22 @@ export async function proxy(request: NextRequest) {
   // Role-based access: read the pm-role cookie (set by layout.tsx on each page load).
   // On the first request after login the cookie doesn't exist yet — fall back to a
   // one-time DB lookup and set the cookies on the response so subsequent requests are fast.
+  // The cookie has a 5-minute maxAge so role demotions take effect within that window.
   let role = request.cookies.get('pm-role')?.value
   let mustChangePwFromCookie = request.cookies.get('pm-must-change-pw')?.value
 
-  if ((!role || mustChangePwFromCookie === undefined) && session) {
+  if (!role || mustChangePwFromCookie === undefined) {
     const { data: userData } = await supabase
       .from('users')
       .select('role, must_change_password')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (userData) {
       role = userData.role
       mustChangePwFromCookie = userData.must_change_password ? 'true' : 'false'
-      const cookieOpts = { httpOnly: true, sameSite: 'strict' as const, path: '/' }
-      supabaseResponse.cookies.set('pm-role', role!, cookieOpts)
-      supabaseResponse.cookies.set('pm-must-change-pw', mustChangePwFromCookie!, cookieOpts)
+      supabaseResponse.cookies.set('pm-role', role!, PM_COOKIE_OPTS)
+      supabaseResponse.cookies.set('pm-must-change-pw', mustChangePwFromCookie!, PM_COOKIE_OPTS)
     }
   }
 
@@ -100,13 +111,17 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // Force password change if flagged
+  // Force password change if flagged. Only the auth API endpoints are exempt —
+  // every other API and page is blocked until the password is changed.
   if (
     mustChangePwFromCookie === 'true' &&
     !pathname.startsWith('/change-password') &&
     !pathname.startsWith('/auth/') &&
-    !pathname.startsWith('/api/')
+    !pathname.startsWith('/api/auth/')
   ) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Password change required.' }, { status: 403 })
+    }
     const url = request.nextUrl.clone()
     url.pathname = '/change-password'
     url.searchParams.set('forced', 'true')

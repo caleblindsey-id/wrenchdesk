@@ -100,12 +100,12 @@ function ChangePasswordForm() {
             />
           </div>
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 transition-colors"
+            className="w-full rounded-md bg-slate-800 px-4 py-3 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Saving...' : 'Set New Password'}
           </button>
@@ -118,7 +118,7 @@ function ChangePasswordForm() {
 export default function ChangePasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-      <Suspense>
+      <Suspense fallback={<div className="w-full max-w-sm mx-4 h-72" />}>
         <ChangePasswordForm />
       </Suspense>
     </div>

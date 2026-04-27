@@ -33,16 +33,15 @@ export default async function RootLayout({
   if (dbUser?.role) {
     try {
       const cookieStore = await cookies()
-      cookieStore.set('pm-role', dbUser.role, {
+      const cookieOpts = {
         httpOnly: true,
-        sameSite: 'strict',
+        sameSite: 'strict' as const,
+        secure: process.env.NODE_ENV === 'production',
         path: '/',
-      })
-      cookieStore.set('pm-must-change-pw', dbUser.must_change_password ? 'true' : 'false', {
-        httpOnly: true,
-        sameSite: 'strict',
-        path: '/',
-      })
+        maxAge: 300, // 5 minutes — bounds role/forced-change staleness across role demotions
+      }
+      cookieStore.set('pm-role', dbUser.role, cookieOpts)
+      cookieStore.set('pm-must-change-pw', dbUser.must_change_password ? 'true' : 'false', cookieOpts)
     } catch {
       // Cookie setting can fail in certain server component contexts — non-fatal
     }
