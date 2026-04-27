@@ -3,9 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { updateTicket } from '@/lib/db/tickets'
 import { updateAnchorMonth } from '@/lib/db/schedules'
 import { getCurrentUser, isTechnician, RESET_ROLES } from '@/lib/auth'
-import { PmTicketRow, TicketStatus, PartRequest } from '@/types/database'
+import { PartRequest, PartUsed, PmTicketUpdate, TicketStatus } from '@/types/database'
+import { VALID_TRANSITIONS, EMPTY_COMPLETION_FIELDS } from '@/lib/ticket-transitions'
 
-// Only allow these fields to be updated via PATCH
+// Only allow these fields to be updated via PATCH. `skip_previous_status` is
+// intentionally excluded — it's set server-side inside the skip-request branch
+// and clients should never write it directly.
 const ALLOWED_FIELDS = [
   'assigned_technician_id',
   'status',
@@ -23,14 +26,12 @@ const ALLOWED_FIELDS = [
   'additional_parts_used',
   'additional_hours_worked',
   'skip_reason',
-  'skip_previous_status',
   'parts_requested',
   'synergy_order_number',
   'machine_hours',
   'date_code',
 ] as const
 
-// Techs can update status + draft completion fields (save progress)
 const TECH_ALLOWED_FIELDS = [
   'status',
   'completed_date',
@@ -45,24 +46,13 @@ const TECH_ALLOWED_FIELDS = [
   'additional_parts_used',
   'additional_hours_worked',
   'skip_reason',
-  'skip_previous_status',
   'parts_requested',
   'machine_hours',
   'date_code',
 ] as const
 
-type AllowedUpdate = Pick<PmTicketRow, typeof ALLOWED_FIELDS[number]>
-
-// Valid forward-only state transitions
-const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  unassigned: ['assigned', 'in_progress', 'skipped'],
-  assigned:   ['in_progress', 'unassigned', 'skipped', 'skip_requested'],
-  in_progress: ['completed', 'assigned', 'unassigned', 'skip_requested'],
-  completed:  ['billed', 'in_progress'],
-  billed:     ['completed', 'in_progress', 'assigned', 'unassigned'],
-  skipped:    ['unassigned'],
-  skip_requested: ['skipped', 'in_progress', 'assigned'],
-}
+type AllowedFieldName = typeof ALLOWED_FIELDS[number]
+type FilteredUpdate = Partial<Record<AllowedFieldName, unknown>>
 
 export async function PATCH(
   request: NextRequest,
@@ -77,14 +67,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Techs can only update the status field (to start work)
     const allowedFields = isTechnician(user.role)
-      ? TECH_ALLOWED_FIELDS as readonly string[]
-      : ALLOWED_FIELDS as readonly string[]
+      ? (TECH_ALLOWED_FIELDS as readonly string[])
+      : (ALLOWED_FIELDS as readonly string[])
 
     const filtered = Object.fromEntries(
       Object.entries(raw).filter(([key]) => allowedFields.includes(key))
-    ) as Partial<AllowedUpdate>
+    ) as FilteredUpdate
 
     if (Object.keys(filtered).length === 0) {
       return NextResponse.json(
@@ -93,9 +82,34 @@ export async function PATCH(
       )
     }
 
+    // Defense-in-depth: techs can only modify their own assigned tickets,
+    // regardless of which fields they're updating. (RLS enforces this too,
+    // but we don't rely on RLS as the only line.)
+    const supabase = await createClient()
+    if (isTechnician(user.role)) {
+      const { data: owned } = await supabase
+        .from('pm_tickets')
+        .select('assigned_technician_id')
+        .eq('id', id)
+        .is('deleted_at', null)
+        .single()
+      if (!owned || owned.assigned_technician_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    // PM parts always have unit_price zeroed (inventory tracking only). Mirror
+    // the /complete route's invariant so PATCH can't smuggle priced PM parts.
+    if (filtered.parts_used !== undefined && Array.isArray(filtered.parts_used)) {
+      filtered.parts_used = (filtered.parts_used as PartUsed[]).map(p => ({
+        ...p,
+        unit_price: 0,
+      }))
+    }
+
     // Synergy item # gate: any part past 'requested' must have product_number set
     if (filtered.parts_requested !== undefined) {
-      const parts = filtered.parts_requested as unknown as PartRequest[]
+      const parts = filtered.parts_requested as PartRequest[]
       const missingItemNo = parts.find(
         (p) => p.status !== 'requested' && !p.product_number?.trim()
       )
@@ -109,7 +123,6 @@ export async function PATCH(
 
     // If a status transition is requested, validate it against the state machine
     if (filtered.status !== undefined) {
-      const supabase = await createClient()
       const { data: current, error: fetchError } = await supabase
         .from('pm_tickets')
         .select('status, assigned_technician_id')
@@ -121,20 +134,24 @@ export async function PATCH(
         return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
       }
 
-      // Techs can only modify their own assigned tickets
-      if (isTechnician(user.role) && current.assigned_technician_id !== user.id) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
-
       const currentStatus = current.status as TicketStatus
       const nextStatus = filtered.status as TicketStatus
 
-      // Techs must use the /complete endpoint to mark tickets complete
-      if (isTechnician(user.role) && nextStatus === 'completed') {
-        return NextResponse.json({ error: 'Use the complete endpoint to submit ticket completion' }, { status: 403 })
+      // Completion must go through POST /api/tickets/[id]/complete so billing
+      // math, signature, machine_hours, and date_code are all enforced.
+      if (nextStatus === 'completed') {
+        return NextResponse.json(
+          { error: 'Use POST /api/tickets/[id]/complete to mark a ticket complete' },
+          { status: 422 }
+        )
       }
-      const allowed = VALID_TRANSITIONS[currentStatus] ?? []
 
+      // Techs can never set status to billed (managers only — billing is a back-office action).
+      if (isTechnician(user.role) && nextStatus === 'billed') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
+      const allowed = VALID_TRANSITIONS[currentStatus] ?? []
       if (!allowed.includes(nextStatus)) {
         return NextResponse.json(
           { error: `Invalid status transition: ${currentStatus} → ${nextStatus}` },
@@ -150,25 +167,10 @@ export async function PATCH(
         if (isTechnician(user.role)) {
           return NextResponse.json({ error: 'Only managers can reopen tickets' }, { status: 403 })
         }
-        // Completed tickets need completion data cleared; skipped just needs status change
-        const updateData = currentStatus === 'completed'
-          ? {
-              status: 'in_progress' as const,
-              completed_date: null,
-              completion_notes: null,
-              hours_worked: null,
-              parts_used: null,
-              billing_amount: null,
-              customer_signature: null,
-              customer_signature_name: null,
-              photos: [],
-              additional_parts_used: [],
-              additional_hours_worked: null,
-              machine_hours: null,
-              date_code: null,
-            }
+        const updateData: Record<string, unknown> = currentStatus === 'completed'
+          ? { status: 'in_progress' as const, ...EMPTY_COMPLETION_FIELDS }
           : { status: 'unassigned' as const }
-        const updated = await updateTicket(id, updateData as any)
+        const updated = await updateTicket(id, updateData)
         return NextResponse.json(updated)
       }
 
@@ -178,12 +180,11 @@ export async function PATCH(
         if (!skipReason) {
           return NextResponse.json({ error: 'A reason is required when requesting a skip' }, { status: 400 })
         }
-
         const updated = await updateTicket(id, {
           status: 'skip_requested',
           skip_reason: skipReason,
           skip_previous_status: currentStatus,
-        } as any)
+        })
         return NextResponse.json(updated)
       }
 
@@ -196,7 +197,7 @@ export async function PATCH(
           status: nextStatus,
           skip_reason: null,
           skip_previous_status: null,
-        } as any)
+        })
         return NextResponse.json(updated)
       }
 
@@ -205,28 +206,33 @@ export async function PATCH(
         if (currentStatus === 'skip_requested' && isTechnician(user.role)) {
           return NextResponse.json({ error: 'Only managers can approve skip requests' }, { status: 403 })
         }
-
         const updated = await updateTicket(id, {
           status: 'skipped',
           skip_reason: null,
           skip_previous_status: null,
-        } as any)
+        })
 
-        // If a reschedule month was provided, update the schedule's anchor
         const rescheduleMonth = Number(raw.reschedule_month)
         if (rescheduleMonth >= 1 && rescheduleMonth <= 12) {
-          const supabaseForSchedule = await createClient()
-          const { data: ticketData } = await supabaseForSchedule
+          const { data: ticketData } = await supabase
             .from('pm_tickets')
             .select('pm_schedule_id')
             .eq('id', id)
             .single()
-
           if (ticketData?.pm_schedule_id) {
             await updateAnchorMonth(ticketData.pm_schedule_id, rescheduleMonth)
           }
         }
+        return NextResponse.json(updated)
+      }
 
+      // assigned → unassigned: clear technician assignment too (otherwise the
+      // old tech_id sticks around and corrupts listing/auto-cancel logic).
+      if (currentStatus === 'assigned' && nextStatus === 'unassigned') {
+        const updated = await updateTicket(id, {
+          status: 'unassigned',
+          assigned_technician_id: null,
+        })
         return NextResponse.json(updated)
       }
 
@@ -235,50 +241,35 @@ export async function PATCH(
         (currentStatus === 'in_progress' && (nextStatus === 'assigned' || nextStatus === 'unassigned')) ||
         (currentStatus === 'billed')
       if (isReset) {
-        if (!RESET_ROLES.includes(user.role!)) {
+        if (!RESET_ROLES.includes(user.role)) {
           return NextResponse.json({ error: 'Only managers can reset ticket status' }, { status: 403 })
         }
 
-        const clearCompletion = {
-          completed_date: null,
-          completion_notes: null,
-          hours_worked: null,
-          parts_used: null,
-          billing_amount: null,
-          customer_signature: null,
-          customer_signature_name: null,
-          photos: [],
-          additional_parts_used: [],
-          additional_hours_worked: null,
-          machine_hours: null,
-          date_code: null,
-        }
-
-        let updateData: Record<string, unknown> = { status: nextStatus }
+        // Build the update payload via PmTicketUpdate so TS validates field names
+        const updateData: PmTicketUpdate = { status: nextStatus }
 
         if (currentStatus === 'billed') {
           updateData.billing_exported = false
-          // Keep completion data only when going back to completed
-          if (nextStatus !== 'completed') {
-            updateData = { ...updateData, ...clearCompletion }
-          }
+          // billed → completed keeps completion data; everything else clears it.
+          // (nextStatus is constrained by VALID_TRANSITIONS; 'completed' was
+          // rejected at line 130, so the remaining options are in_progress /
+          // assigned / unassigned, all of which clear.)
+          Object.assign(updateData, EMPTY_COMPLETION_FIELDS)
         } else {
-          // in_progress → assigned/unassigned: clear draft data
-          updateData = { ...updateData, ...clearCompletion }
+          // in_progress → assigned/unassigned: clear draft completion data
+          Object.assign(updateData, EMPTY_COMPLETION_FIELDS)
         }
 
-        // Clear technician assignment when resetting to unassigned
         if (nextStatus === 'unassigned') {
           updateData.assigned_technician_id = null
         }
 
-        const updated = await updateTicket(id, updateData as any)
+        const updated = await updateTicket(id, updateData)
         return NextResponse.json(updated)
       }
     }
 
-    const updated = await updateTicket(id, filtered)
-
+    const updated = await updateTicket(id, filtered as PmTicketUpdate)
     return NextResponse.json(updated)
   } catch (err) {
     console.error(`tickets/[id] PATCH error:`, err)
@@ -300,7 +291,7 @@ export async function DELETE(
     if (!user?.role) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    if (!RESET_ROLES.includes(user.role!)) {
+    if (!RESET_ROLES.includes(user.role)) {
       return NextResponse.json({ error: 'Only managers can delete tickets' }, { status: 403 })
     }
 

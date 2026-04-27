@@ -20,8 +20,10 @@ export default async function TicketDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  // Include deleted tickets so managers can render the restore banner.
+  // Techs are filtered out via the isTechnician check below.
   const [ticket, user, laborRateStr] = await Promise.all([
-    getTicket(id),
+    getTicket(id, { includeDeleted: true }),
     getCurrentUser(),
     getSetting('labor_rate_per_hour'),
   ])

@@ -156,10 +156,10 @@ export async function getSkipRequestedCount(filters?: {
   return count ?? 0
 }
 
-export async function getTicket(id: string): Promise<TicketDetail | null> {
+export async function getTicket(id: string, options?: { includeDeleted?: boolean }): Promise<TicketDetail | null> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('pm_tickets')
     .select(`
       *,
@@ -171,7 +171,14 @@ export async function getTicket(id: string): Promise<TicketDetail | null> {
       schedule:pm_schedules(billing_type, flat_rate)
     `)
     .eq('id', id)
-    .single()
+
+  // By default exclude soft-deleted tickets. Callers that need to render the
+  // restore banner (manager-only ticket detail page) opt in via includeDeleted.
+  if (!options?.includeDeleted) {
+    query = query.is('deleted_at', null)
+  }
+
+  const { data, error } = await query.single()
 
   if (error) {
     if (error.code === 'PGRST116') return null
@@ -251,21 +258,6 @@ export async function completeTicket(
 
   if (error) throw error
   return updated as PmTicketRow
-}
-
-export async function getTicketsByMonth(month: number, year: number): Promise<PmTicketRow[]> {
-  const supabase = await createClient()
-
-  const { data, error } = await supabase
-    .from('pm_tickets')
-    .select('*')
-    .eq('month', month)
-    .eq('year', year)
-    .is('deleted_at', null)
-    .order('created_at')
-
-  if (error) throw error
-  return data as PmTicketRow[]
 }
 
 export async function bulkAssignTechnician(

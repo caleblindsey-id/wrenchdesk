@@ -2,15 +2,27 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { TicketWithJoins } from '@/lib/db/tickets'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+// Minimal shape SkipDialog actually consumes — kept narrow so both
+// TicketWithJoins (board listing) and TicketDetail (detail page) satisfy it.
+// month/year/work_order_number are required-non-null in the DB.
+export interface SkippableTicket {
+  id: string
+  month: number
+  year: number
+  work_order_number: number
+  customers: { name: string } | null
+  equipment: { make: string | null; model: string | null } | null
+  pm_schedules: { interval_months: number; anchor_month: number } | null
+}
+
 interface SkipDialogProps {
-  tickets: TicketWithJoins[]
+  tickets: SkippableTicket[]
   onClose: () => void
   onDone: () => void
 }

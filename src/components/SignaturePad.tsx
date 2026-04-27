@@ -78,7 +78,7 @@ export default function SignaturePad({ onSignatureChange, initialName = '' }: Si
     <div className="space-y-3">
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Customer Signature <span className="text-red-500">*</span>
           </label>
           {hasSigned && (
@@ -91,17 +91,17 @@ export default function SignaturePad({ onSignatureChange, initialName = '' }: Si
             </button>
           )}
         </div>
-        <div className="border border-gray-300 rounded-md bg-white overflow-hidden touch-none">
+        <div className="border border-gray-300 dark:border-gray-600 rounded-md bg-white overflow-hidden touch-none">
           <canvas
             ref={canvasRef}
             className="w-full"
             style={{ height: 150 }}
           />
         </div>
-        <p className="text-xs text-gray-400 mt-1">Sign above with finger or stylus</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Sign above with finger or stylus</p>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Printed Name <span className="text-red-500">*</span>
         </label>
         <input
@@ -109,7 +109,7 @@ export default function SignaturePad({ onSignatureChange, initialName = '' }: Si
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+          className="rounded-md border border-gray-300 dark:border-gray-600 px-3 py-3 sm:py-2 text-sm text-gray-900 dark:text-white dark:bg-gray-700 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
           placeholder="Customer's full name"
         />
       </div>

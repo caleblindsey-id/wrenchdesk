@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 import { bulkAssignTechnician } from '@/lib/db/tickets'
 import { getCurrentUser, MANAGER_ROLES } from '@/lib/auth'
 
@@ -27,6 +28,22 @@ export async function POST(request: NextRequest) {
     if (!technicianId) {
       return NextResponse.json(
         { error: 'technicianId is required' },
+        { status: 400 }
+      )
+    }
+
+    // Verify the target user is an active technician — prevents bulk-assigning
+    // tickets to managers, inactive users, or arbitrary UUIDs.
+    const supabase = await createClient()
+    const { data: tech } = await supabase
+      .from('users')
+      .select('id, role, active')
+      .eq('id', technicianId)
+      .maybeSingle()
+
+    if (!tech || tech.role !== 'technician' || !tech.active) {
+      return NextResponse.json(
+        { error: 'technicianId must reference an active technician' },
         { status: 400 }
       )
     }

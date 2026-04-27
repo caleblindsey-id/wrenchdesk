@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { TicketDetail } from '@/lib/db/tickets'
-import { PartUsed, TicketPhoto, UserRole } from '@/types/database'
+import { PartUsed, TicketPhoto, UserRole, TicketStatus } from '@/types/database'
+import { VALID_TRANSITIONS } from '@/lib/ticket-transitions'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/image-utils'
 import { formatPhoneNumber } from '@/lib/phone'
 import SignaturePad from '@/components/SignaturePad'
 import ReadOnlyPhotos from '@/components/ReadOnlyPhotos'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import SkipDialog from '../SkipDialog'
 
 interface ProductResult {
@@ -87,14 +89,12 @@ function toPartUsed(entries: PartEntry[]): PartUsed[] {
   }))
 }
 
-const FORCE_TRANSITIONS: Record<string, string[]> = {
-  unassigned: ['assigned', 'in_progress', 'skipped'],
-  assigned:   ['in_progress', 'unassigned', 'skipped', 'skip_requested'],
-  in_progress: ['assigned', 'unassigned', 'skip_requested'],
-  completed:  ['billed', 'in_progress'],
-  billed:     ['completed', 'in_progress', 'assigned', 'unassigned'],
-  skipped:    ['unassigned'],
-  skip_requested: ['skipped', 'in_progress', 'assigned'],
+// Force-transition targets shown in the Super Admin override panel. Pulled
+// from the shared VALID_TRANSITIONS table so client and server cannot drift.
+// Completion is intentionally filtered out — the server-side PATCH route
+// rejects status='completed' (must go through POST /complete).
+function forceTransitionsFor(status: TicketStatus): TicketStatus[] {
+  return (VALID_TRANSITIONS[status] ?? []).filter(t => t !== 'completed')
 }
 
 export default function TicketActions({ ticket, userRole, userId, laborRate }: TicketActionsProps) {
@@ -497,7 +497,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completedDate, hoursWorked, completionNotes, pmParts, additionalParts, additionalHoursWorked, poNumber, billingContactName, billingContactEmail, billingContactPhone, photos])
+  }, [completedDate, hoursWorked, machineHours, dateCode, completionNotes, pmParts, additionalParts, additionalHoursWorked, poNumber, billingContactName, billingContactEmail, billingContactPhone, photos])
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files
@@ -534,8 +534,25 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     const photo = photos[index]
     const supabase = createClient()
     await supabase.storage.from('ticket-photos').remove([photo.storage_path])
+    if (photo.previewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(photo.previewUrl)
+    }
     setPhotos((prev) => prev.filter((_, i) => i !== index))
   }
+
+  // Release any blob: object URLs we created during photo upload so the
+  // browser can reclaim memory when the user navigates away mid-completion.
+  // Signed-URL previews (https:) are unaffected.
+  useEffect(() => {
+    return () => {
+      photos.forEach((p) => {
+        if (p.previewUrl?.startsWith('blob:')) {
+          URL.revokeObjectURL(p.previewUrl)
+        }
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handlePrepareWorkOrder() {
     setSharing(true)
@@ -592,8 +609,10 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     URL.revokeObjectURL(url)
   }
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
   async function handleDelete() {
-    if (!confirm('Permanently delete this ticket? This cannot be undone.')) return
+    setDeleteConfirmOpen(false)
     setLoading(true)
     setError(null)
     try {
@@ -705,7 +724,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Super Admin: Force Status</p>
       <div className="flex flex-wrap gap-2">
-        {(FORCE_TRANSITIONS[ticket.status] ?? []).map((target) => (
+        {forceTransitionsFor(ticket.status as TicketStatus).map((target) => (
           <button
             key={target}
             type="button"
@@ -728,12 +747,21 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
     <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
       <button
         type="button"
-        onClick={handleDelete}
+        onClick={() => setDeleteConfirmOpen(true)}
         disabled={loading}
         className="px-4 py-2 text-xs font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
       >
         {loading ? 'Deleting...' : 'Delete Ticket'}
       </button>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="Delete this ticket?"
+        message="The ticket will be moved to deleted. A manager can restore it from the deleted view; soft-deleted tickets may be purged after 30 days."
+        confirmLabel="Delete"
+        loading={loading}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </div>
   ) : null
 
@@ -949,10 +977,11 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             {/* Date + PO */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label htmlFor="completedDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Completion Date
                 </label>
                 <input
+                  id="completedDate"
                   type="date"
                   required
                   value={completedDate}
@@ -975,10 +1004,11 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="hoursWorked" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Hours Worked
               </label>
               <input
+                id="hoursWorked"
                 type="number"
                 step="0.25"
                 min="0"
@@ -992,30 +1022,32 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="machineHours" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Machine Hours <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="machineHours"
                   type="number"
                   step="0.1"
                   min="0"
                   required
                   value={machineHours}
                   onChange={(e) => setMachineHours(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  className="rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                   placeholder="e.g. 1247.5"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="dateCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Date Code <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id="dateCode"
                   type="text"
                   required
                   value={dateCode}
                   onChange={(e) => setDateCode(e.target.value)}
-                  className="rounded-md border border-gray-300 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
+                  className="rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 px-3 py-3 sm:py-2 text-sm text-gray-900 w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
                   placeholder="e.g. 26W15"
                 />
               </div>
@@ -1124,10 +1156,11 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
 
             {/* Completion Notes */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="completionNotes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Completion Notes
               </label>
               <textarea
+                id="completionNotes"
                 value={completionNotes}
                 onChange={(e) => setCompletionNotes(e.target.value)}
                 rows={3}
@@ -1359,7 +1392,20 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
 
         {skipDialogOpen && (
           <SkipDialog
-            tickets={[ticket as any]}
+            tickets={[{
+              id: ticket.id,
+              month: ticket.month,
+              year: ticket.year,
+              work_order_number: ticket.work_order_number,
+              customers: ticket.customers ? { name: ticket.customers.name } : null,
+              equipment: ticket.equipment
+                ? { make: ticket.equipment.make, model: ticket.equipment.model }
+                : null,
+              // TicketDetail exposes the schedule join as `schedule` (different
+              // shape than the listing's `pm_schedules`); SkipDialog needs the
+              // listing shape so we map it explicitly.
+              pm_schedules: null,
+            }]}
             onClose={() => setSkipDialogOpen(false)}
             onDone={() => {
               setSkipDialogOpen(false)

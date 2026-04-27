@@ -53,10 +53,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Fetch all active schedules with their equipment and customer (for credit hold check)
+    // Fetch all active schedules with the equipment + customer fields the
+    // generator actually uses. Avoids pulling JSONB blobs (default_products,
+    // contact_*) we don't need at this layer.
     const { data: rawSchedules, error: schedulesError } = await supabase
       .from('pm_schedules')
-      .select('*, equipment(*, customers(id, name, credit_hold))')
+      .select(`
+        id, equipment_id, interval_months, anchor_month, active, billing_type, flat_rate,
+        equipment(id, customer_id, active, default_technician_id, default_products,
+          customers(id, name, credit_hold))
+      `)
       .eq('active', true)
 
     if (schedulesError) throw schedulesError
@@ -163,6 +169,18 @@ export async function POST(request: NextRequest) {
           a.name.localeCompare(b.name)
         ),
       })
+    }
+
+    // Validate skipCreditHoldCustomerIds — every id must reference a customer
+    // that's actually on credit hold for this generation cycle. Prevents
+    // suppressing arbitrary non-credit-hold customers from generation.
+    for (const cid of skipCreditHoldSet) {
+      if (!creditHoldCustomers.has(cid)) {
+        return NextResponse.json(
+          { error: `Customer ${cid} is not on credit hold` },
+          { status: 400 }
+        )
+      }
     }
 
     // Auto-cancel unassigned prior-month orphans for schedules we're about to generate.

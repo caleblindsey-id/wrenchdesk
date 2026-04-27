@@ -65,10 +65,21 @@ export async function POST(request: NextRequest) {
     if (equipment_id) {
       const { data: equip } = await supabase
         .from('equipment')
-        .select('default_products, blanket_po_number')
+        .select('customer_id, default_products, blanket_po_number')
         .eq('id', equipment_id)
         .single()
-      if (equip?.default_products && Array.isArray(equip.default_products)) {
+
+      // Verify the equipment actually belongs to the customer the caller provided —
+      // prevents cross-customer tickets that mix Customer A's equipment with
+      // Customer B's invoice.
+      if (!equip || equip.customer_id !== customer_id) {
+        return NextResponse.json(
+          { error: 'Equipment does not belong to the selected customer' },
+          { status: 422 }
+        )
+      }
+
+      if (equip.default_products && Array.isArray(equip.default_products)) {
         defaultParts = equip.default_products.map((p: { synergy_product_id: number; quantity: number; description: string }) => ({
           synergy_product_id: p.synergy_product_id,
           quantity: p.quantity,
@@ -76,7 +87,7 @@ export async function POST(request: NextRequest) {
           unit_price: 0,
         }))
       }
-      blanketPo = (equip as { blanket_po_number?: string | null } | null)?.blanket_po_number ?? null
+      blanketPo = (equip as { blanket_po_number?: string | null }).blanket_po_number ?? null
 
       // Auto-link to the equipment's active PM schedule
       const { data: schedule } = await supabase
