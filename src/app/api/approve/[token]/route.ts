@@ -1,6 +1,39 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
+const MAX_SIGNATURE_BYTES = 200_000 // ~200 KB base64 PNG ~= 150 KB image
+const MAX_DECLINE_REASON_LEN = 2000
+
+// In-memory rate limiter scoped per (token + IP). Keys auto-evict after the
+// window. This is per-Vercel-function-instance — good enough to slow brute-force
+// attacks; not a strong distributed limit. If we ever see real abuse, swap for
+// @upstash/ratelimit + Vercel KV.
+const rateBuckets = new Map<string, { count: number; resetAt: number }>()
+const RATE_WINDOW_MS = 60_000
+const RATE_MAX = 10
+
+function rateLimit(key: string): boolean {
+  const now = Date.now()
+  const bucket = rateBuckets.get(key)
+  if (!bucket || bucket.resetAt < now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS })
+    return true
+  }
+  if (bucket.count >= RATE_MAX) return false
+  bucket.count++
+  return true
+}
+
+// Simple periodic cleanup so the map doesn't grow unbounded across long-lived
+// function instances.
+function cleanupRateBuckets() {
+  if (rateBuckets.size < 1000) return
+  const now = Date.now()
+  for (const [key, bucket] of rateBuckets) {
+    if (bucket.resetAt < now) rateBuckets.delete(key)
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ token: string }> }
@@ -9,6 +42,17 @@ export async function POST(
 
   if (!token) {
     return NextResponse.json({ error: 'Missing token' }, { status: 400 })
+  }
+
+  // Rate-limit per token+IP. Only the first 200 chars of the IP header are used
+  // (handles spoofed comma-separated lists from upstream proxies).
+  const ip = (request.headers.get('x-forwarded-for') ?? '').split(',')[0]?.trim().slice(0, 200) || 'unknown'
+  cleanupRateBuckets()
+  if (!rateLimit(`${token}|${ip}`)) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a moment and try again.' },
+      { status: 429 }
+    )
   }
 
   const body = await request.json().catch(() => null)
@@ -26,6 +70,24 @@ export async function POST(
     if (!signature || !signature_name?.trim()) {
       return NextResponse.json(
         { error: 'Signature and name are required to approve' },
+        { status: 400 }
+      )
+    }
+    if (typeof signature !== 'string' || signature.length > MAX_SIGNATURE_BYTES) {
+      return NextResponse.json(
+        { error: 'Signature is too large. Please re-sign and try again.' },
+        { status: 413 }
+      )
+    }
+    if (typeof signature_name !== 'string' || signature_name.length > 200) {
+      return NextResponse.json({ error: 'Name is too long.' }, { status: 400 })
+    }
+  }
+
+  if (action === 'decline' && decline_reason !== undefined && decline_reason !== null) {
+    if (typeof decline_reason !== 'string' || decline_reason.trim().length > MAX_DECLINE_REASON_LEN) {
+      return NextResponse.json(
+        { error: 'Decline reason is too long.' },
         { status: 400 }
       )
     }

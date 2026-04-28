@@ -4,6 +4,9 @@ import ApprovalForm from './ApprovalForm'
 
 export const metadata: Metadata = {
   title: 'Service Estimate — Imperial Dade',
+  // Defense-in-depth against future analytics/CDN scripts leaking the
+  // single-use approval token via Referer header.
+  other: { referrer: 'no-referrer' },
 }
 
 export default async function ApprovalPage({
@@ -20,7 +23,6 @@ export default async function ApprovalPage({
       id, work_order_number, status, problem_description, diagnosis_notes,
       estimate_labor_hours, estimate_labor_rate, estimate_parts, estimate_amount,
       billing_type,
-      contact_name, contact_email, contact_phone,
       service_address, service_city, service_state, service_zip,
       equipment_make, equipment_model, equipment_serial_number,
       approval_token_expires_at, created_at,
@@ -87,7 +89,7 @@ export default async function ApprovalPage({
   ].filter(Boolean).join(', ')
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
         <div className="text-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -96,60 +98,60 @@ export default async function ApprovalPage({
             alt="Imperial Dade"
             className="h-12 mx-auto mb-4"
           />
-          <h1 className="text-2xl font-bold text-gray-900">Service Estimate</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Service Estimate</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {ticket.work_order_number ? `WO-${ticket.work_order_number}` : 'Service Estimate'}
             {' — '}
             {new Date(ticket.created_at).toLocaleDateString()}
           </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
               Customer & Equipment
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div>
-                <span className="text-gray-500">Customer</span>
-                <p className="font-medium text-gray-900">
+                <span className="text-gray-500 dark:text-gray-400">Customer</span>
+                <p className="font-medium text-gray-900 dark:text-white">
                   {(Array.isArray(ticket.customers) ? (ticket.customers as { name: string }[])[0] : ticket.customers as { name: string })?.name ?? 'Unknown'}
                 </p>
               </div>
               {equipmentLabel && (
                 <div>
-                  <span className="text-gray-500">Equipment</span>
-                  <p className="font-medium text-gray-900">{equipmentLabel}</p>
+                  <span className="text-gray-500 dark:text-gray-400">Equipment</span>
+                  <p className="font-medium text-gray-900 dark:text-white">{equipmentLabel}</p>
                 </div>
               )}
               {ticket.equipment_serial_number && (
                 <div>
-                  <span className="text-gray-500">Serial Number</span>
-                  <p className="font-medium text-gray-900">{ticket.equipment_serial_number}</p>
+                  <span className="text-gray-500 dark:text-gray-400">Serial Number</span>
+                  <p className="font-medium text-gray-900 dark:text-white">{ticket.equipment_serial_number}</p>
                 </div>
               )}
               {serviceAddress && (
                 <div>
-                  <span className="text-gray-500">Service Address</span>
-                  <p className="font-medium text-gray-900">{serviceAddress}</p>
+                  <span className="text-gray-500 dark:text-gray-400">Service Address</span>
+                  <p className="font-medium text-gray-900 dark:text-white">{serviceAddress}</p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
               Problem Description
             </h2>
-            <p className="text-sm text-gray-800 whitespace-pre-wrap">
+            <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
               {ticket.problem_description}
             </p>
             {ticket.diagnosis_notes && (
               <>
-                <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-4 mb-2">
+                <h2 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mt-4 mb-2">
                   Diagnosis
                 </h2>
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
                   {ticket.diagnosis_notes}
                 </p>
               </>
@@ -157,35 +159,35 @@ export default async function ApprovalPage({
           </div>
 
           <div className="px-6 py-4">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
               Estimate
             </h2>
             <div className="space-y-2 text-sm">
               {laborHours > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-gray-600">
+                  <span className="text-gray-600 dark:text-gray-400">
                     Labor: {laborHours} hrs × ${laborRate.toFixed(2)}/hr
                   </span>
-                  <span className="font-medium text-gray-900">${laborTotal.toFixed(2)}</span>
+                  <span className="font-medium text-gray-900 dark:text-white">${laborTotal.toFixed(2)}</span>
                 </div>
               )}
               {parts.map((part, i) => (
                 <div key={i} className="flex justify-between">
-                  <span className="text-gray-600">
+                  <span className="text-gray-600 dark:text-gray-400">
                     {part.description} ×{part.quantity}
                     {part.warranty_covered ? ' (warranty)' : ''}
                   </span>
-                  <span className="font-medium text-gray-900">
+                  <span className="font-medium text-gray-900 dark:text-white">
                     {part.warranty_covered ? '$0.00' : `$${(part.quantity * part.unit_price).toFixed(2)}`}
                   </span>
                 </div>
               ))}
-              <div className="flex justify-between pt-3 mt-3 border-t border-gray-200">
-                <span className="text-base font-bold text-gray-900">Estimate Total</span>
-                <span className="text-lg font-bold text-gray-900">${total.toFixed(2)}</span>
+              <div className="flex justify-between pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                <span className="text-base font-bold text-gray-900 dark:text-white">Estimate Total</span>
+                <span className="text-lg font-bold text-gray-900 dark:text-white">${total.toFixed(2)}</span>
               </div>
             </div>
-            <p className="text-xs text-gray-400 mt-3">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
               This estimate is subject to change. All prices are subject to applicable taxes.
             </p>
           </div>
@@ -199,7 +201,7 @@ export default async function ApprovalPage({
 
 function ErrorPage({ title, message }: { title: string; message: string }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
       <div className="max-w-md text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -207,8 +209,8 @@ function ErrorPage({ title, message }: { title: string; message: string }) {
           alt="Imperial Dade"
           className="h-10 mx-auto mb-6"
         />
-        <h1 className="text-xl font-bold text-gray-900 mb-2">{title}</h1>
-        <p className="text-sm text-gray-600">{message}</p>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{title}</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-300">{message}</p>
       </div>
     </div>
   )

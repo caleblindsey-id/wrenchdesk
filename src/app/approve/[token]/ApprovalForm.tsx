@@ -70,10 +70,10 @@ export default function ApprovalForm({ token }: ApprovalFormProps) {
 
   if (result === 'approved') {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-green-200 p-8 text-center">
-        <div className="text-green-600 text-4xl mb-3">✓</div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Estimate Approved</h2>
-        <p className="text-sm text-gray-600">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-green-200 dark:border-green-800 p-8 text-center">
+        <div className="text-green-600 dark:text-green-400 text-4xl mb-3">✓</div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Estimate Approved</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           Thank you for approving this estimate. Our service team will be in touch
           to schedule the work.
         </p>
@@ -83,9 +83,9 @@ export default function ApprovalForm({ token }: ApprovalFormProps) {
 
   if (result === 'declined') {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Estimate Declined</h2>
-        <p className="text-sm text-gray-600">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Estimate Declined</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-300">
           We&apos;ve recorded your response. A member of our team will follow up with you.
         </p>
       </div>
@@ -95,16 +95,20 @@ export default function ApprovalForm({ token }: ApprovalFormProps) {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div
+          id="approval-error"
+          role="alert"
+          className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm"
+        >
           {error}
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-sm font-semibold text-gray-900 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
           Approve Estimate
         </h2>
-        <p className="text-xs text-gray-500 mb-4">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
           By signing below, you authorize Imperial Dade to perform the work described
           in this estimate at the quoted price. Actual charges may vary.
         </p>
@@ -119,43 +123,50 @@ export default function ApprovalForm({ token }: ApprovalFormProps) {
         <button
           onClick={handleApprove}
           disabled={loading || !signatureImage || !signatureName.trim()}
+          aria-describedby={error ? 'approval-error' : undefined}
           className="mt-4 w-full px-4 py-3 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Submitting...' : 'Approve Estimate'}
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         {!showDecline ? (
           <button
             onClick={() => setShowDecline(true)}
-            className="w-full text-sm text-red-600 hover:text-red-700 font-medium py-2 transition-colors"
+            className="w-full text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium py-2 transition-colors"
           >
             Decline this estimate
           </button>
         ) : (
           <>
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
               Decline Estimate
             </h2>
+            <label htmlFor="decline-reason" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+              Reason (optional)
+            </label>
             <textarea
+              id="decline-reason"
               value={declineReason}
               onChange={(e) => setDeclineReason(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 mb-3"
+              maxLength={2000}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 mb-3"
               placeholder="Reason for declining (optional)"
             />
             <div className="flex gap-2">
               <button
                 onClick={handleDecline}
                 disabled={loading}
-                className="flex-1 px-4 py-3 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+                aria-describedby={error ? 'approval-error' : undefined}
+                className="flex-1 px-4 py-3 text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
               >
                 {loading ? 'Submitting...' : 'Decline Estimate'}
               </button>
               <button
                 onClick={() => setShowDecline(false)}
-                className="px-4 py-3 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               >
                 Cancel
               </button>

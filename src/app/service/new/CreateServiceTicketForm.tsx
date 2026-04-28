@@ -97,7 +97,8 @@ export function CreateServiceTicketForm() {
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       const supabase = createClient()
-      const q = customerSearch.trim()
+      // Strip PostgREST filter-syntax chars before injecting into .or()
+      const q = customerSearch.trim().replace(/[,()]/g, ' ')
       const { data } = await supabase
         .from('customers')
         .select('id, name, account_number, credit_hold')

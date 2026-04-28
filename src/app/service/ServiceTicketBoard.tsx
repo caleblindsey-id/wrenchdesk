@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, AlertTriangle } from 'lucide-react'
-import { UserRow, MANAGER_ROLES } from '@/types/database'
+import { UserRow } from '@/types/database'
 import { ServiceTicketWithJoins, ServiceTicketStatus, ServicePriority, ServiceTicketType } from '@/types/service-tickets'
 import ServiceStatusBadge from '@/components/ServiceStatusBadge'
 import CreditHoldBadge from '@/components/CreditHoldBadge'
@@ -86,7 +86,6 @@ interface ServiceTicketBoardProps {
 }
 
 export function ServiceTicketBoard({ currentUser }: ServiceTicketBoardProps) {
-  const isManager = !!currentUser.role && MANAGER_ROLES.includes(currentUser.role)
   const isTech = currentUser.role === 'technician'
   const router = useRouter()
 
@@ -125,7 +124,7 @@ export function ServiceTicketBoard({ currentUser }: ServiceTicketBoardProps) {
         if (statusFilter) params.set('status', statusFilter)
         if (priorityFilter) params.set('priority', priorityFilter)
         if (typeFilter) params.set('type', typeFilter)
-        if (techFilter) params.set('technician', techFilter)
+        if (techFilter) params.set('technicianId', techFilter)
         if (waitingOnParts) params.set('waiting_on_parts', 'true')
 
         const res = await fetch(`/api/service-tickets?${params.toString()}`)

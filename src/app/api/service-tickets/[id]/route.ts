@@ -118,11 +118,48 @@ export async function PATCH(
       )
     }
 
+    // billing_amount validation: must be a finite non-negative number when present.
+    if (filtered.billing_amount !== undefined && filtered.billing_amount !== null) {
+      if (typeof filtered.billing_amount !== 'number' || !Number.isFinite(filtered.billing_amount) || filtered.billing_amount < 0) {
+        return NextResponse.json({ error: 'billing_amount must be a non-negative number' }, { status: 400 })
+      }
+    }
+
+    // diagnostic_charge validation
+    if (filtered.diagnostic_charge !== undefined && filtered.diagnostic_charge !== null) {
+      const dc = filtered.diagnostic_charge
+      if (typeof dc !== 'number' || !Number.isFinite(dc) || dc < 0) {
+        return NextResponse.json({ error: 'diagnostic_charge must be a non-negative number' }, { status: 400 })
+      }
+    }
+
+    // estimate_labor_hours validation
+    if (filtered.estimate_labor_hours !== undefined && filtered.estimate_labor_hours !== null) {
+      const h = parseFloat(String(filtered.estimate_labor_hours))
+      if (!Number.isFinite(h) || h < 0) {
+        return NextResponse.json({ error: 'estimate_labor_hours must be a non-negative number' }, { status: 400 })
+      }
+    }
+
+    // estimate_parts validation: every line must have non-negative unit_price and positive quantity.
+    if (filtered.estimate_parts !== undefined && Array.isArray(filtered.estimate_parts)) {
+      for (const p of filtered.estimate_parts as ServicePartUsed[]) {
+        const qty = Number(p.quantity)
+        const price = Number(p.unit_price)
+        if (!Number.isFinite(qty) || qty <= 0) {
+          return NextResponse.json({ error: 'Each estimate part must have a positive quantity' }, { status: 400 })
+        }
+        if (!Number.isFinite(price) || price < 0) {
+          return NextResponse.json({ error: 'Each estimate part unit_price must be non-negative' }, { status: 400 })
+        }
+      }
+    }
+
     // Fetch current ticket state for validation
     const supabase = await createClient()
     const { data: current, error: fetchError } = await supabase
       .from('service_tickets')
-      .select('status, assigned_technician_id, parts_requested, estimate_amount, billing_type')
+      .select('status, assigned_technician_id, parts_requested, estimate_amount, billing_type, photos')
       .eq('id', id)
       .single()
 
@@ -193,8 +230,17 @@ export async function PATCH(
         }
       }
 
-      // Reopen: clear completion + estimate data when going back to 'open'
+      // Reopen: clear completion + estimate data when going back to 'open'.
+      // Also clean orphaned photos from Storage (DB array gets cleared below;
+      // matching blob removal prevents Storage from accumulating dead objects).
       if (nextStatus === 'open' && ['completed', 'billed', 'in_progress'].includes(currentStatus)) {
+        const existingPhotos = (current.photos ?? []) as Array<{ storage_path?: string }>
+        const paths = existingPhotos.map(p => p.storage_path).filter((p): p is string => !!p)
+        if (paths.length > 0) {
+          await supabase.storage.from('ticket-photos').remove(paths).catch(err =>
+            console.error('reopen: failed to remove orphaned photos', err)
+          )
+        }
         Object.assign(filtered, {
           completed_at: null,
           completion_notes: null,
@@ -205,6 +251,10 @@ export async function PATCH(
           customer_signature_name: null,
           photos: [],
           started_at: null,
+          // Clear Synergy validation state so re-billing has to re-validate.
+          synergy_order_number: null,
+          synergy_validation_status: null,
+          synergy_validated_at: null,
         })
       }
       if (nextStatus === 'open') {
@@ -224,33 +274,76 @@ export async function PATCH(
           // Note: decline_reason is intentionally preserved for reference
         })
       }
+
+      // Staff inline approval (status -> 'approved') should also retire the
+      // public approval token so the link panel doesn't keep showing a live URL.
+      if (nextStatus === 'approved' && currentStatus !== 'approved') {
+        Object.assign(filtered, {
+          approval_token: null,
+          approval_token_expires_at: null,
+        })
+      }
     }
 
-    // --- Estimate submission: open → estimated (server computes total) ---
-    if (filtered.status === 'estimated') {
+    // --- Estimate recomputation ---
+    // Recompute estimate_amount whenever estimate_parts or estimate_labor_hours
+    // is changing, regardless of status. The previous version only ran on
+    // open → estimated transitions, leaving the stored amount stale after any
+    // staff revision (which the PDF route then prints as the canonical total).
+    const estimateInputsChanged =
+      filtered.estimate_parts !== undefined ||
+      filtered.estimate_labor_hours !== undefined ||
+      filtered.status === 'estimated'
+
+    if (estimateInputsChanged) {
       const rateStr = await getSetting('labor_rate_per_hour')
       const laborRate = rateStr ? parseFloat(rateStr) : 75
 
-      const hours = parseFloat(String(filtered.estimate_labor_hours ?? 0))
-      const parts = (filtered.estimate_parts as ServicePartUsed[]) ?? []
+      // Use the new value if supplied, otherwise fall back to the existing
+      // ticket's stored value (one extra read in the rare revision case).
+      let hours: number
+      if (filtered.estimate_labor_hours !== undefined) {
+        hours = parseFloat(String(filtered.estimate_labor_hours ?? 0))
+      } else {
+        const { data: existing } = await supabase
+          .from('service_tickets')
+          .select('estimate_labor_hours')
+          .eq('id', id)
+          .single()
+        hours = parseFloat(String(existing?.estimate_labor_hours ?? 0))
+      }
+
+      let parts: ServicePartUsed[]
+      if (filtered.estimate_parts !== undefined) {
+        parts = (filtered.estimate_parts as ServicePartUsed[]) ?? []
+      } else {
+        const { data: existing } = await supabase
+          .from('service_tickets')
+          .select('estimate_parts')
+          .eq('id', id)
+          .single()
+        parts = (existing?.estimate_parts as ServicePartUsed[]) ?? []
+      }
 
       // Snapshot the labor rate at estimate time
       filtered.estimate_labor_rate = laborRate
 
-      // Compute total — exclude warranty-covered parts for warranty billing
-      const laborTotal = hours * laborRate
+      const laborTotal = (Number.isFinite(hours) ? hours : 0) * laborRate
       const billingType = current.billing_type ?? 'non_warranty'
       const partsTotal = billingType === 'warranty'
         ? 0
         : parts
             .filter((p: ServicePartUsed) => !p.warranty_covered)
-            .reduce((sum: number, p: ServicePartUsed) => sum + (p.quantity * p.unit_price), 0)
+            .reduce((sum: number, p: ServicePartUsed) => sum + (Number(p.quantity) || 0) * (Number(p.unit_price) || 0), 0)
       const total = laborTotal + partsTotal
 
       filtered.estimate_amount = total
 
-      // Auto-approve estimates under $100
-      if (total < 100) {
+      // Auto-approve only fires on the actual open → estimated transition;
+      // post-submission revisions don't re-trigger auto-approval (a manager
+      // could otherwise drop a revised total below $100 to bypass customer
+      // approval).
+      if (filtered.status === 'estimated' && total < 100) {
         filtered.status = 'approved'
         filtered.estimate_approved = true
         filtered.estimate_approved_at = new Date().toISOString()
@@ -292,7 +385,11 @@ export async function PATCH(
           { status: 400 }
         )
       }
-      const allReceived = parts.length > 0 && parts.every((p: PartRequest) => p.status === 'received')
+      // parts_received: ignore cancelled parts. Without this filter, a single
+      // cancelled part keeps parts_received=false forever (since cancelled parts
+      // retain their pre-cancel status, never 'received').
+      const live = parts.filter((p: PartRequest) => !p.cancelled)
+      const allReceived = live.length > 0 && live.every((p: PartRequest) => p.status === 'received')
       filtered.parts_received = allReceived
     }
 

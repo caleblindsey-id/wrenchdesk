@@ -206,21 +206,25 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
     setError(null)
     try {
       const supabase = createClient()
-      const newPhotos: Array<TicketPhoto & { previewUrl?: string }> = []
-      for (const file of Array.from(files)) {
-        const compressed = await compressImage(file)
-        const id = crypto.randomUUID()
-        const path = `${ticket.id}/${id}.jpg`
-        const { error: uploadError } = await supabase.storage
-          .from('ticket-photos')
-          .upload(path, compressed, { contentType: 'image/jpeg' })
-        if (uploadError) throw uploadError
-        newPhotos.push({
-          storage_path: path,
-          uploaded_at: new Date().toISOString(),
-          previewUrl: URL.createObjectURL(compressed),
+      // Upload in parallel — Supabase Storage handles concurrent writes; each
+      // path is uniquely UUID'd. Serial awaits added 5x latency on 5-photo
+      // uploads over cellular.
+      const newPhotos = await Promise.all(
+        Array.from(files).map(async (file) => {
+          const compressed = await compressImage(file)
+          const id = crypto.randomUUID()
+          const path = `${ticket.id}/${id}.jpg`
+          const { error: uploadError } = await supabase.storage
+            .from('ticket-photos')
+            .upload(path, compressed, { contentType: 'image/jpeg' })
+          if (uploadError) throw uploadError
+          return {
+            storage_path: path,
+            uploaded_at: new Date().toISOString(),
+            previewUrl: URL.createObjectURL(compressed),
+          } as TicketPhoto & { previewUrl?: string }
         })
-      }
+      )
       setPhotos((prev) => [...prev, ...newPhotos])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload photo')
@@ -233,7 +237,16 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
   async function handlePhotoDelete(index: number) {
     const photo = photos[index]
     const supabase = createClient()
-    await supabase.storage.from('ticket-photos').remove([photo.storage_path])
+    const { error: removeError } = await supabase.storage
+      .from('ticket-photos')
+      .remove([photo.storage_path])
+    if (removeError) {
+      setError('Failed to delete photo. Please try again.')
+      return
+    }
+    if (photo.previewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(photo.previewUrl)
+    }
     setPhotos((prev) => prev.filter((_, i) => i !== index))
   }
 
@@ -507,8 +520,21 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
   }
 
   async function handleSavePartPo(index: number) {
+    // Read-before-write: pull the latest server state, merge our single field
+    // change in, then write back. Reduces (but doesn't eliminate) the
+    // race window where two staff PATCH the array concurrently and one wins.
     await apiAction(async () => {
-      await patchTicket({ parts_requested: partsRequested })
+      const supabase = createClient()
+      const { data: latest } = await supabase
+        .from('service_tickets')
+        .select('parts_requested')
+        .eq('id', ticket.id)
+        .single()
+      const serverParts = (latest?.parts_requested ?? []) as PartRequest[]
+      const merged = serverParts.map((p, i) =>
+        i === index ? { ...p, po_number: partsRequested[index]?.po_number } : p
+      )
+      await patchTicket({ parts_requested: merged })
     })
   }
 
@@ -518,9 +544,20 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
     setPartsRequested(updatedParts)
   }
 
-  async function handleSavePartVendorItemCode() {
+  async function handleSavePartVendorItemCode(index: number) {
+    // Read-before-write merge — same pattern as handleSavePartPo.
     await apiAction(async () => {
-      await patchTicket({ parts_requested: partsRequested })
+      const supabase = createClient()
+      const { data: latest } = await supabase
+        .from('service_tickets')
+        .select('parts_requested')
+        .eq('id', ticket.id)
+        .single()
+      const serverParts = (latest?.parts_requested ?? []) as PartRequest[]
+      const merged = serverParts.map((p, i) =>
+        i === index ? { ...p, vendor_item_code: partsRequested[index]?.vendor_item_code } : p
+      )
+      await patchTicket({ parts_requested: merged })
     })
   }
 
@@ -1193,15 +1230,19 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
 
                   {/* Diagnosis Notes */}
                   <div className="max-w-lg">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label htmlFor="diagnosis-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Diagnosis Notes
                     </label>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mb-1.5">
+                      ⚠ Visible to the customer on the estimate approval page. Keep internal-only commentary out.
+                    </p>
                     <textarea
+                      id="diagnosis-notes"
                       value={diagnosisNotes}
                       onChange={(e) => setDiagnosisNotes(e.target.value)}
                       rows={3}
                       className="rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-500 px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-slate-500"
-                      placeholder="Describe the issue found..."
+                      placeholder="Describe the issue found (visible to customer)..."
                     />
                   </div>
 
@@ -1326,7 +1367,7 @@ export function ServiceTicketDetail({ ticket, userRole, userId, laborRate }: Ser
                             type="text"
                             value={part.vendor_item_code ?? ''}
                             onChange={(e) => handleUpdatePartVendorItemCode(i, e.target.value)}
-                            onBlur={() => handleSavePartVendorItemCode()}
+                            onBlur={() => handleSavePartVendorItemCode(i)}
                             placeholder="Manufacturer / vendor part #"
                             className="rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-500 px-2 py-1 text-xs w-48 focus:outline-none focus:ring-2 focus:ring-slate-500"
                           />

@@ -33,12 +33,56 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid priority' }, { status: 400 })
     }
 
+    const customerIdInt = parseInt(customer_id)
+    const shipToLocationId = body.ship_to_location_id
+      ? parseInt(String(body.ship_to_location_id), 10)
+      : null
+    const equipmentId = body.equipment_id || null
+
+    let diagnosticCharge: number | null = null
+    if (body.diagnostic_charge != null && body.diagnostic_charge !== '') {
+      diagnosticCharge = parseFloat(String(body.diagnostic_charge))
+      if (!Number.isFinite(diagnosticCharge) || diagnosticCharge < 0) {
+        return NextResponse.json({ error: 'diagnostic_charge must be a non-negative number' }, { status: 400 })
+      }
+    }
+
     const supabase = await createClient()
 
+    // Verify ship_to_location and equipment actually belong to the same customer.
+    // Cross-customer linking would silently corrupt service history + billing.
+    if (shipToLocationId) {
+      const { data: shipTo } = await supabase
+        .from('ship_to_locations')
+        .select('customer_id')
+        .eq('id', shipToLocationId)
+        .maybeSingle()
+      if (!shipTo || shipTo.customer_id !== customerIdInt) {
+        return NextResponse.json(
+          { error: 'Ship-to location does not belong to the selected customer' },
+          { status: 422 }
+        )
+      }
+    }
+
+    if (equipmentId) {
+      const { data: equip } = await supabase
+        .from('equipment')
+        .select('customer_id')
+        .eq('id', equipmentId)
+        .maybeSingle()
+      if (!equip || equip.customer_id !== customerIdInt) {
+        return NextResponse.json(
+          { error: 'Equipment does not belong to the selected customer' },
+          { status: 422 }
+        )
+      }
+    }
+
     const insertData = {
-      customer_id: parseInt(customer_id),
-      ship_to_location_id: body.ship_to_location_id ? parseInt(String(body.ship_to_location_id), 10) : null,
-      equipment_id: body.equipment_id || null,
+      customer_id: customerIdInt,
+      ship_to_location_id: shipToLocationId,
+      equipment_id: equipmentId,
       assigned_technician_id: body.assigned_technician_id || null,
       created_by_id: user.id,
       ticket_type,
@@ -55,9 +99,7 @@ export async function POST(request: NextRequest) {
       equipment_make: body.equipment_make || null,
       equipment_model: body.equipment_model || null,
       equipment_serial_number: body.equipment_serial_number || null,
-      diagnostic_charge: body.diagnostic_charge != null && body.diagnostic_charge !== ''
-        ? parseFloat(String(body.diagnostic_charge))
-        : null,
+      diagnostic_charge: diagnosticCharge,
       diagnostic_invoice_number: body.diagnostic_invoice_number
         ? String(body.diagnostic_invoice_number).trim() || null
         : null,

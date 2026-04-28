@@ -141,9 +141,11 @@ export async function POST(
       }),
     }
 
-    // Render PDF
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const element = React.createElement(EstimateDocument as any, {
+    // Render PDF. @react-pdf/renderer's renderToBuffer expects ReactElement<DocumentProps>;
+    // EstimateDocument is a typed wrapper around <Document>. Using
+    // React.createElement with explicit props gives us prop-typed errors at
+    // build time without falling back to `as any`.
+    const element = React.createElement(EstimateDocument, {
       estimate,
       logoBase64,
     })
@@ -151,7 +153,7 @@ export async function POST(
     let buffer: Buffer
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      buffer = await renderToBuffer(element as any)
+      buffer = await renderToBuffer(element as React.ReactElement<any>)
     } catch (renderErr) {
       console.error('[estimate-pdf] renderToBuffer error:', renderErr)
       return NextResponse.json({ error: 'Failed to render PDF' }, { status: 500 })

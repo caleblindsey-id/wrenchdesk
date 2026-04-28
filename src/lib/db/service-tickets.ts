@@ -25,10 +25,18 @@ interface ServiceTicketFilters {
 export async function getServiceTickets(filters?: ServiceTicketFilters): Promise<ServiceTicketWithJoins[]> {
   const supabase = await createClient()
 
+  // Listing query: only select columns the board renders. Avoids pulling
+  // large JSONB blobs (estimate_parts, parts_requested, customer_signature,
+  // photos) on every row — meaningful payload reduction at scale.
   let query = supabase
     .from('service_tickets')
     .select(`
-      *,
+      id, work_order_number, status, priority, ticket_type, billing_type,
+      problem_description, customer_id, equipment_id, assigned_technician_id,
+      contact_name, contact_phone, service_address, service_city, service_state,
+      equipment_make, equipment_model, estimate_amount, billing_amount,
+      synergy_order_number, synergy_validation_status, parts_received,
+      created_at, updated_at, started_at, completed_at,
       customers ( name, account_number, credit_hold ),
       equipment ( make, model, serial_number, description,
         ship_to_locations ( name, address, city, state, zip )

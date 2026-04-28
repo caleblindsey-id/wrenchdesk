@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { completeServiceTicket } from '@/lib/db/service-tickets'
 import { getCurrentUser, isTechnician } from '@/lib/auth'
+import { getSetting } from '@/lib/db/settings'
 import type { ServicePartUsed } from '@/types/service-tickets'
 import type { TicketPhoto } from '@/types/database'
 
@@ -13,8 +14,11 @@ interface CompleteServiceTicketBody {
   customer_signature: string | null
   customer_signature_name: string | null
   photos: TicketPhoto[]
-  billing_amount?: number
   warranty_labor_covered?: boolean
+}
+
+function isNonNegativeNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0
 }
 
 export async function POST(
@@ -27,7 +31,6 @@ export async function POST(
 
     const { completed_at, hours_worked, parts_used, completion_notes, customer_signature, customer_signature_name, photos } = body
 
-    // Validate required fields
     if (!completed_at || hours_worked === undefined) {
       return NextResponse.json(
         { error: 'completed_at and hours_worked are required' },
@@ -35,16 +38,36 @@ export async function POST(
       )
     }
 
+    if (!isNonNegativeNumber(hours_worked)) {
+      return NextResponse.json(
+        { error: 'hours_worked must be a non-negative number' },
+        { status: 400 }
+      )
+    }
+
+    // Validate parts_used: every line non-negative price + positive qty
+    if (Array.isArray(parts_used)) {
+      for (const p of parts_used) {
+        const qty = Number(p.quantity)
+        const price = Number(p.unit_price)
+        if (!Number.isFinite(qty) || qty <= 0) {
+          return NextResponse.json({ error: 'Each part must have a positive quantity' }, { status: 400 })
+        }
+        if (!Number.isFinite(price) || price < 0) {
+          return NextResponse.json({ error: 'Each part unit_price must be non-negative' }, { status: 400 })
+        }
+      }
+    }
+
     const user = await getCurrentUser()
     if (!user?.role) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Fetch current ticket
     const supabase = await createClient()
     const { data: current, error: fetchError } = await supabase
       .from('service_tickets')
-      .select('status, assigned_technician_id, billing_type, ticket_type')
+      .select('status, assigned_technician_id, billing_type, ticket_type, diagnostic_charge')
       .eq('id', id)
       .single()
 
@@ -60,12 +83,10 @@ export async function POST(
       )
     }
 
-    // Techs can only complete their own assigned tickets
     if (isTechnician(user.role) && current.assigned_technician_id !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Must be in_progress to complete
     if (current.status !== 'in_progress') {
       return NextResponse.json(
         { error: `Ticket must be in_progress to complete (currently: ${current.status})` },
@@ -73,53 +94,36 @@ export async function POST(
       )
     }
 
-    // Compute billing amount based on billing type
+    // Server-authoritative billing math (mirrors PM /complete in section 2).
+    // billing_amount is no longer accepted from the client — it's recomputed
+    // for all roles from authoritative inputs.
+    const billingType = current.billing_type as string
+    const finalParts: ServicePartUsed[] = parts_used ?? []
+    const diagnosticCharge = Number(current.diagnostic_charge ?? 0) || 0
+
     let finalBillingAmount: number
-
-    if (body.billing_amount !== undefined && !isTechnician(user.role)) {
-      // Managers can override billing amount
-      finalBillingAmount = body.billing_amount
+    if (billingType === 'warranty') {
+      finalBillingAmount = 0
     } else {
-      // Server-computed billing
-      const billingType = current.billing_type as string
+      const rateStr = await getSetting('labor_rate_per_hour')
+      const laborRate = rateStr ? parseFloat(rateStr) : 75
+      const laborTotal = hours_worked * laborRate
 
-      if (billingType === 'warranty') {
-        // Full warranty: $0
-        finalBillingAmount = 0
-      } else {
-        // Fetch labor rate from settings
-        const { data: settings } = await supabase
-          .from('settings')
-          .select('value')
-          .eq('key', 'labor_rate_per_hour')
-          .single()
-        const laborRate = settings ? parseFloat(settings.value) : 75
-
-        const finalParts = parts_used ?? []
-
-        if (billingType === 'partial_warranty') {
-          // Parts covered by warranty, labor billed
-          const laborTotal = hours_worked * laborRate
-          // Only bill parts NOT covered by warranty
-          const partsTotal = finalParts
-            .filter(p => !p.warranty_covered)
-            .reduce((sum, p) => sum + (p.quantity * p.unit_price), 0)
-          finalBillingAmount = laborTotal + partsTotal
-        } else {
-          // non_warranty: bill everything
-          const laborTotal = hours_worked * laborRate
-          const partsTotal = finalParts.reduce(
-            (sum, p) => sum + (p.quantity * p.unit_price), 0
+      const billablePartsTotal = billingType === 'partial_warranty'
+        ? finalParts.filter(p => !p.warranty_covered).reduce(
+            (sum, p) => sum + (Number(p.quantity) || 0) * (Number(p.unit_price) || 0), 0
           )
-          finalBillingAmount = laborTotal + partsTotal
-        }
-      }
+        : finalParts.reduce(
+            (sum, p) => sum + (Number(p.quantity) || 0) * (Number(p.unit_price) || 0), 0
+          )
+
+      finalBillingAmount = laborTotal + billablePartsTotal + diagnosticCharge
     }
 
     const updated = await completeServiceTicket(id, {
       completed_at,
       hours_worked,
-      parts_used: parts_used ?? [],
+      parts_used: finalParts,
       completion_notes: completion_notes ?? null,
       billing_amount: finalBillingAmount,
       customer_signature: customer_signature ?? null,

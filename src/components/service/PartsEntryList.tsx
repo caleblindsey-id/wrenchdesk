@@ -143,7 +143,9 @@ export default function PartsEntryList({ parts, setParts, showPricing, showWarra
       })
 
       const supabase = createClient()
-      const q = value.trim()
+      // Strip PostgREST-significant chars from the query before injecting
+      // into the .or() filter — commas/parens are filter-syntax separators.
+      const q = value.trim().replace(/[,()]/g, ' ')
       const { data } = await supabase
         .from('products')
         .select('id, synergy_id, number, description, unit_price')
