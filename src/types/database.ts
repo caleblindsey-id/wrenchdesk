@@ -265,6 +265,9 @@ export type PmTicketRow = {
   // incomplete tickets and pre-migration-048 historical rows; PDF generator
   // falls back to the live customer flag when null.
   show_pricing: boolean | null
+  // Snapshot of the ship-to where this PM is being / was serviced. NULL means
+  // the ticket inherits from equipment.ship_to_location_id (legacy pre-049).
+  ship_to_location_id: number | null
   created_at: string
   updated_at: string
 }
@@ -364,6 +367,34 @@ export type EquipmentSaleLeadCandidateRow = {
   reviewed_at: string | null
 }
 
+export type ShipToRequestStatus = 'pending' | 'resolved' | 'dismissed'
+
+export type ShipToRequestRow = {
+  id: number
+  customer_id: number
+  requested_by: string
+  pm_ticket_id: string | null
+  equipment_id: string | null
+  note: string
+  status: ShipToRequestStatus
+  requested_at: string
+  resolved_at: string | null
+  resolved_ship_to_id: number | null
+  resolved_by: string | null
+}
+
+export type EquipmentLocationHistoryRow = {
+  id: number
+  equipment_id: string
+  from_ship_to_id: number | null
+  to_ship_to_id: number
+  changed_by: string
+  changed_at: string
+  pm_ticket_id: string | null
+  service_ticket_id: string | null
+  note: string | null
+}
+
 // ============================================================
 // Helper: make some keys optional
 // ============================================================
@@ -406,7 +437,7 @@ export type PmScheduleInsert = MakeOptional<
 
 export type PmTicketInsert = MakeOptional<
   Omit<PmTicketRow, 'id' | 'created_at' | 'updated_at'>,
-  'status' | 'billing_exported' | 'parts_used' | 'pm_schedule_id' | 'equipment_id' | 'customer_id' | 'assigned_technician_id' | 'created_by_id' | 'scheduled_date' | 'completed_date' | 'completion_notes' | 'hours_worked' | 'billing_amount' | 'work_order_number' | 'additional_parts_used' | 'additional_hours_worked' | 'customer_signature' | 'customer_signature_name' | 'photos' | 'po_number' | 'billing_contact_name' | 'billing_contact_email' | 'billing_contact_phone' | 'skip_reason' | 'skip_previous_status' | 'parts_requested' | 'synergy_order_number' | 'machine_hours' | 'date_code' | 'deleted_at' | 'deleted_by_id' | 'show_pricing'
+  'status' | 'billing_exported' | 'parts_used' | 'pm_schedule_id' | 'equipment_id' | 'customer_id' | 'assigned_technician_id' | 'created_by_id' | 'scheduled_date' | 'completed_date' | 'completion_notes' | 'hours_worked' | 'billing_amount' | 'work_order_number' | 'additional_parts_used' | 'additional_hours_worked' | 'customer_signature' | 'customer_signature_name' | 'photos' | 'po_number' | 'billing_contact_name' | 'billing_contact_email' | 'billing_contact_phone' | 'skip_reason' | 'skip_previous_status' | 'parts_requested' | 'synergy_order_number' | 'machine_hours' | 'date_code' | 'deleted_at' | 'deleted_by_id' | 'show_pricing' | 'ship_to_location_id'
 >
 
 export type SettingsRow = {
@@ -780,6 +811,19 @@ export interface Database {
             referencedColumns: ['id']
           },
         ]
+      }
+      ship_to_requests: {
+        Row: ShipToRequestRow
+        Insert: Pick<ShipToRequestRow, 'customer_id' | 'requested_by' | 'note'> &
+          Partial<Pick<ShipToRequestRow, 'pm_ticket_id' | 'equipment_id' | 'status'>>
+        Update: Partial<Omit<ShipToRequestRow, 'id' | 'requested_at'>>
+        Relationships: []
+      }
+      equipment_location_history: {
+        Row: EquipmentLocationHistoryRow
+        Insert: Omit<EquipmentLocationHistoryRow, 'id' | 'changed_at'> & { changed_at?: string }
+        Update: never
+        Relationships: []
       }
     }
     Views: {

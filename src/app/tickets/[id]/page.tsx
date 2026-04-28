@@ -9,6 +9,7 @@ import TicketActions from './TicketActions'
 import PmPartsSection from './PmPartsSection'
 import PoNumberSection from './PoNumberSection'
 import DeletedBanner from './DeletedBanner'
+import ChangeLocationSection from './ChangeLocationSection'
 import ServiceHistory from '@/components/ServiceHistory'
 import EquipmentNotes from '@/components/EquipmentNotes'
 import { getCurrentUser, isTechnician, RESET_ROLES } from '@/lib/auth'
@@ -150,7 +151,10 @@ export default async function TicketDetailPage({
           <div className="md:col-span-2">
             <span className="text-gray-500 dark:text-gray-400">Ship-To</span>
             {(() => {
-              const shipTo = ticket.equipment?.ship_to_locations
+              // Prefer the PM's snapshot ship-to (set when a tech relocates the
+              // equipment mid-PM). Fall back to the equipment's home ship-to,
+              // then to the customer's billing address.
+              const shipTo = ticket.pm_ship_to ?? ticket.equipment?.ship_to_locations
               const shipToAddress = shipTo
                 ? [shipTo.address, shipTo.city, shipTo.state, shipTo.zip].filter(Boolean).join(', ')
                 : ''
@@ -176,6 +180,23 @@ export default async function TicketDetailPage({
               }
               return <p className="text-gray-900 dark:text-white font-medium">—</p>
             })()}
+            {!isDeleted &&
+              !['completed', 'billed', 'skipped'].includes(ticket.status) &&
+              ticket.customer_id != null &&
+              ticket.equipment_id != null && (
+                <div className="mt-2">
+                  <ChangeLocationSection
+                    ticketId={ticket.id}
+                    customerId={ticket.customer_id}
+                    equipmentId={ticket.equipment_id}
+                    currentShipToId={
+                      ticket.ship_to_location_id ??
+                      ticket.equipment?.ship_to_location_id ??
+                      null
+                    }
+                  />
+                </div>
+              )}
           </div>
           <div>
             <span className="text-gray-500 dark:text-gray-400">Scheduled Date</span>
