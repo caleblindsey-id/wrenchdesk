@@ -159,34 +159,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Preview mode: don't touch the DB — just report what would happen
-    if (preview) {
-      return NextResponse.json({
-        preview: true,
-        wouldCreate: ticketsToCreate.length,
-        skipped,
-        creditHoldCustomers: Array.from(creditHoldCustomers.values()).sort((a, b) =>
-          a.name.localeCompare(b.name)
-        ),
-      })
-    }
-
-    // Validate skipCreditHoldCustomerIds — every id must reference a customer
-    // that's actually on credit hold for this generation cycle. Prevents
-    // suppressing arbitrary non-credit-hold customers from generation.
-    for (const cid of skipCreditHoldSet) {
-      if (!creditHoldCustomers.has(cid)) {
-        return NextResponse.json(
-          { error: `Customer ${cid} is not on credit hold` },
-          { status: 400 }
-        )
-      }
-    }
-
     // Flag tickets whose equipment still has a prior-period PM in an open state
     // (unassigned/assigned/in_progress). The new ticket is created normally but
     // requires_review=true so a manager can Approve & Keep or Skip it. Replaces
-    // the prior silent auto-skip-orphan-unassigned behavior.
+    // the prior silent auto-skip-orphan-unassigned behavior. Runs in preview
+    // mode too so the modal can surface the count alongside Will Create.
     let flaggedCount = 0
     const equipmentIdsToCreate = ticketsToCreate
       .map(t => t.equipment_id)
@@ -220,6 +197,31 @@ export async function POST(request: NextRequest) {
           t.review_reason = `Prior PM ${prior.month}/${prior.year} still ${prior.status}`
           flaggedCount++
         }
+      }
+    }
+
+    // Preview mode: don't touch the DB — just report what would happen
+    if (preview) {
+      return NextResponse.json({
+        preview: true,
+        wouldCreate: ticketsToCreate.length,
+        wouldFlag: flaggedCount,
+        skipped,
+        creditHoldCustomers: Array.from(creditHoldCustomers.values()).sort((a, b) =>
+          a.name.localeCompare(b.name)
+        ),
+      })
+    }
+
+    // Validate skipCreditHoldCustomerIds — every id must reference a customer
+    // that's actually on credit hold for this generation cycle. Prevents
+    // suppressing arbitrary non-credit-hold customers from generation.
+    for (const cid of skipCreditHoldSet) {
+      if (!creditHoldCustomers.has(cid)) {
+        return NextResponse.json(
+          { error: `Customer ${cid} is not on credit hold` },
+          { status: 400 }
+        )
       }
     }
 

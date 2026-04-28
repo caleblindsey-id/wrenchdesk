@@ -14,6 +14,7 @@ interface CreditHoldCustomer {
 interface PreviewResponse {
   preview: true
   wouldCreate: number
+  wouldFlag: number
   skipped: number
   creditHoldCustomers: CreditHoldCustomer[]
 }
@@ -222,7 +223,7 @@ export default function GeneratePmModal({
 
         {preview && !loading && (
           <div className="mt-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="grid grid-cols-3 gap-3 text-sm">
               <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                   Will create
@@ -233,10 +234,33 @@ export default function GeneratePmModal({
               </div>
               <div className="rounded-md border border-gray-200 dark:border-gray-700 p-3">
                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                  Credit hold customers
+                  Credit hold
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
                   {preview.creditHoldCustomers.length}
+                </p>
+              </div>
+              <div
+                className={`rounded-md border p-3 ${
+                  preview.wouldFlag > 0
+                    ? 'border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30'
+                    : 'border-gray-200 dark:border-gray-700'
+                }`}
+                title="Tickets whose equipment still has an open prior-month PM. Each will be flagged for manager review."
+              >
+                <p className={`text-xs uppercase tracking-wide ${
+                  preview.wouldFlag > 0
+                    ? 'text-blue-700 dark:text-blue-300'
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}>
+                  Duplicates
+                </p>
+                <p className={`mt-1 text-2xl font-semibold ${
+                  preview.wouldFlag > 0
+                    ? 'text-blue-800 dark:text-blue-200'
+                    : 'text-gray-900 dark:text-white'
+                }`}>
+                  {preview.wouldFlag}
                 </p>
               </div>
             </div>
