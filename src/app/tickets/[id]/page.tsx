@@ -240,6 +240,12 @@ export default async function TicketDetailPage({
               )}
             </p>
           </div>
+          <div>
+            <span className="text-gray-500 dark:text-gray-400">PO Number</span>
+            <p className="text-gray-900 dark:text-white font-medium">
+              {ticket.po_number || '—'}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -250,6 +256,7 @@ export default async function TicketDetailPage({
             ticketId={ticket.id}
             initialPartsRequested={ticket.parts_requested ?? []}
             initialSynergyOrderNumber={ticket.synergy_order_number ?? null}
+            initialPoNumber={ticket.po_number ?? null}
             isTech={isTechnician(user?.role ?? null)}
             canReset={RESET_ROLES.includes(user?.role ?? ('' as never))}
             status={ticket.status}
