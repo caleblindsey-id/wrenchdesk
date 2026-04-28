@@ -1,4 +1,5 @@
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer'
+import { APP_NAME } from '@/lib/branding'
 
 // ============================================================
 // Types
@@ -357,7 +358,7 @@ export function EstimateDocument({ estimate, logoBase64, companyName }: Estimate
 
         {/* Footer */}
         <Text style={styles.footer} fixed>
-          Estimate — {companyName ?? 'CallBoard'} Service Department
+          Estimate — {companyName ?? APP_NAME} Service Department
         </Text>
       </Page>
     </Document>

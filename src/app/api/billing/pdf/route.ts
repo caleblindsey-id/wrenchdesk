@@ -11,6 +11,7 @@ import { getSetting } from '@/lib/db/settings'
 import { getUser } from '@/lib/db/users'
 import { MANAGER_ROLES } from '@/lib/auth'
 import { MONTHS } from '@/lib/pm-schedule-options'
+import { APP_NAME } from '@/lib/branding'
 
 // ============================================================
 // Types
@@ -415,7 +416,7 @@ export async function POST(request: NextRequest) {
       month: monthNum,
       year: yearNum,
       exportedAt,
-      companyName: companyName || 'CallBoard',
+      companyName: companyName || APP_NAME,
     } as Parameters<typeof BillingDocument>[0])
 
     let buffer: Buffer

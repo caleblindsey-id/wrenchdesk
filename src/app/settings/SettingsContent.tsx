@@ -476,14 +476,13 @@ function AddUserModal({
   onClose: () => void
   onCreated: () => void
 }) {
-  const TEMP_PASSWORD = 'ChangeMeNow1!'
-
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<UserRole>('technician')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdEmail, setCreatedEmail] = useState<string | null>(null)
+  const [tempPassword, setTempPassword] = useState<string | null>(null)
 
   function handleClose() {
     setName('')
@@ -491,6 +490,7 @@ function AddUserModal({
     setRole('technician')
     setError(null)
     setCreatedEmail(null)
+    setTempPassword(null)
     onClose()
   }
 
@@ -505,14 +505,15 @@ function AddUserModal({
       body: JSON.stringify({ name, email, role }),
     })
 
+    const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      const data = await res.json()
       setError(data.error ?? 'Failed to create user.')
       setLoading(false)
       return
     }
 
     setCreatedEmail(email)
+    setTempPassword(data.tempPassword ?? null)
     setName('')
     setEmail('')
     setRole('technician')
@@ -546,7 +547,7 @@ function AddUserModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">Temp password</span>
-                <span className="font-mono text-gray-900 dark:text-white">{TEMP_PASSWORD}</span>
+                <span className="font-mono text-gray-900 dark:text-white">{tempPassword ?? '(unavailable)'}</span>
               </div>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400">

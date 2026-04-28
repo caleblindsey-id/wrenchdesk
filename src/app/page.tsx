@@ -444,11 +444,15 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {/* Sync status */}
-      <div>
-        <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Sync Status</h2>
-        <SyncStatusBanner />
-      </div>
+      {/* Sync status — manager+ only. /api/sync/status is role-gated, so
+          rendering this for techs would just generate spurious 401s and an
+          empty banner slot. */}
+      {!isTech && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Sync Status</h2>
+          <SyncStatusBanner />
+        </div>
+      )}
     </div>
   )
 }

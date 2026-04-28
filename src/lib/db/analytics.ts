@@ -1,6 +1,69 @@
 import { createClient } from '@/lib/supabase/server'
-import { TechnicianTargetRow, PartUsed } from '@/types/database'
+import { TechnicianTargetRow, PartUsed, UserRole } from '@/types/database'
 import { getSetting } from '@/lib/db/settings'
+
+// ============================================================
+// Role-aware response shaping
+// ============================================================
+//
+// Coordinators are part of MANAGER_ROLES (they need access to most analytics
+// for visibility) but should NOT see compensation-derived fields. Profit and
+// laborCost can be back-calculated to per-tech hourly_cost when revenue + hours
+// are also visible. These helpers strip those fields from the API response
+// before it leaves the server. Pages that bypass the API (SSR) call them too.
+
+type TeamPayloadShape = {
+  techRows?: Array<Record<string, unknown>>
+  current?: Record<string, unknown>
+  [k: string]: unknown
+}
+
+export function stripCostFieldsForCoordinator<T extends TeamPayloadShape>(payload: T, role: UserRole): T {
+  if (role !== 'coordinator') return payload
+  const next: T = JSON.parse(JSON.stringify(payload))
+  if (Array.isArray(next.techRows)) {
+    for (const row of next.techRows) {
+      row.hourlyCost = null
+      row.laborCost = null
+      row.grossProfit = null
+    }
+  }
+  if (next.current && typeof next.current === 'object') {
+    ;(next.current as Record<string, unknown>).grossProfit = null
+    ;(next.current as Record<string, unknown>).teamGrossProfit = null
+  }
+  return next
+}
+
+type TechPayloadShape = {
+  tech?: { hourlyCost?: number | null; [k: string]: unknown }
+  current?: Record<string, unknown>
+  prior?: Record<string, unknown>
+  yoy?: Record<string, unknown> | null
+  recentTickets?: Array<Record<string, unknown>>
+  trend?: Array<Record<string, unknown>>
+  [k: string]: unknown
+}
+
+export function stripTechCostFieldsForCoordinator<T extends TechPayloadShape>(payload: T, role: UserRole): T {
+  if (role !== 'coordinator') return payload
+  const next: T = JSON.parse(JSON.stringify(payload))
+  if (next.tech) next.tech.hourlyCost = null
+  for (const k of ['current', 'prior', 'yoy'] as const) {
+    const slot = next[k]
+    if (slot && typeof slot === 'object') {
+      ;(slot as Record<string, unknown>).laborCost = null
+      ;(slot as Record<string, unknown>).grossProfit = null
+    }
+  }
+  if (Array.isArray(next.recentTickets)) {
+    for (const t of next.recentTickets) t.profit = null
+  }
+  if (Array.isArray(next.trend)) {
+    for (const t of next.trend) t.profit = null
+  }
+  return next
+}
 
 // ============================================================
 // Types
@@ -160,8 +223,10 @@ function aggregateTechMetrics(
     (sum, t) => sum + (t.hours_worked ?? 0) + (t.additional_hours_worked ?? 0),
     0
   )
-  const laborCost = hourlyCost != null ? totalHours * hourlyCost : null
-  const grossProfit = laborCost != null ? revenue - laborCost : null
+  // Round cost-derived values to cents — matches the .toFixed(2) UI display
+  // and avoids sub-cent IEEE 754 drift between accumulated totals.
+  const laborCost = hourlyCost != null ? Math.round(totalHours * hourlyCost * 100) / 100 : null
+  const grossProfit = laborCost != null ? Math.round((revenue - laborCost) * 100) / 100 : null
   const revenuePerHour = totalHours > 0 ? revenue / totalHours : null
 
   // Avg completion days
@@ -594,15 +659,24 @@ export async function getTechnicianAnalytics(
     .or(`technician_id.eq.${techId},technician_id.is.null`)
     .order('effective_from', { ascending: false })
 
+  // Two-pass resolution: individual targets always beat team defaults for
+  // the same metric, regardless of effective_from ordering. The previous
+  // single-pass version had a tautological inner check that meant a more-
+  // recent team default could silently override an older individual target.
   const resolvedTargets: ResolvedTarget[] = []
   const seen = new Set<string>()
+  // Pass 1 — pick the most-recent individual target per metric.
   for (const t of targets ?? []) {
-    if (!seen.has(t.metric)) {
-      // Individual targets take priority over team defaults
-      if (t.technician_id === techId || !seen.has(t.metric)) {
-        resolvedTargets.push({ metric: t.metric, targetValue: t.target_value, periodType: t.period_type })
-        seen.add(t.metric)
-      }
+    if (t.technician_id === techId && !seen.has(t.metric)) {
+      resolvedTargets.push({ metric: t.metric, targetValue: t.target_value, periodType: t.period_type })
+      seen.add(t.metric)
+    }
+  }
+  // Pass 2 — fill remaining metrics with the most-recent team default.
+  for (const t of targets ?? []) {
+    if (t.technician_id === null && !seen.has(t.metric)) {
+      resolvedTargets.push({ metric: t.metric, targetValue: t.target_value, periodType: t.period_type })
+      seen.add(t.metric)
     }
   }
 

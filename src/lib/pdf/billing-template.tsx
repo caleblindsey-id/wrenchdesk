@@ -520,7 +520,7 @@ export function BillingDocument({ tickets, month, year, exportedAt, companyName 
         <Page key={ticket.id} size="LETTER" style={styles.page} wrap>
           {/* Header — on every page but logically per-ticket page */}
           <View style={styles.header} fixed>
-            <Text style={styles.companyName}>{companyName ?? 'CallBoard'} — Service Department</Text>
+            <Text style={styles.companyName}>{companyName ?? APP_NAME} — Service Department</Text>
             <Text style={styles.subtitle}>
               PM Billing Summary — {monthName} {year}
             </Text>

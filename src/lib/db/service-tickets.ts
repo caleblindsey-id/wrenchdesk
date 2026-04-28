@@ -202,20 +202,23 @@ export async function getPartsOnOrderCount(
 ): Promise<number> {
   const supabase = await createClient()
 
-  const serviceQuery = supabase
+  // Supabase query builders return new objects on each chained call —
+  // mutating the variable reference (without re-assignment) silently drops
+  // the filter. Rebind via let so technicianId scoping actually applies.
+  let serviceQuery = supabase
     .from('service_tickets')
     .select('id', { count: 'exact', head: true })
     .filter('parts_requested', 'cs', JSON.stringify([{ status: 'ordered' }]))
     .not('status', 'in', '("billed","declined","canceled")')
-  const pmQuery = supabase
+  let pmQuery = supabase
     .from('pm_tickets')
     .select('id', { count: 'exact', head: true })
     .is('deleted_at', null)
     .filter('parts_requested', 'cs', JSON.stringify([{ status: 'ordered' }]))
     .not('status', 'in', '("completed","billed","skipped","skip_requested")')
   if (technicianId) {
-    serviceQuery.eq('assigned_technician_id', technicianId)
-    pmQuery.eq('assigned_technician_id', technicianId)
+    serviceQuery = serviceQuery.eq('assigned_technician_id', technicianId)
+    pmQuery = pmQuery.eq('assigned_technician_id', technicianId)
   }
 
   if (ticketType === 'service') {
@@ -245,20 +248,20 @@ export async function getPartsReadyForPickupCount(
 ): Promise<number> {
   const supabase = await createClient()
 
-  const serviceQuery = supabase
+  let serviceQuery = supabase
     .from('service_tickets')
     .select('id', { count: 'exact', head: true })
     .filter('parts_requested', 'cs', JSON.stringify([{ status: 'received' }]))
     .not('status', 'in', '("billed","declined","canceled")')
-  const pmQuery = supabase
+  let pmQuery = supabase
     .from('pm_tickets')
     .select('id', { count: 'exact', head: true })
     .is('deleted_at', null)
     .filter('parts_requested', 'cs', JSON.stringify([{ status: 'received' }]))
     .not('status', 'in', '("completed","billed","skipped","skip_requested")')
   if (technicianId) {
-    serviceQuery.eq('assigned_technician_id', technicianId)
-    pmQuery.eq('assigned_technician_id', technicianId)
+    serviceQuery = serviceQuery.eq('assigned_technician_id', technicianId)
+    pmQuery = pmQuery.eq('assigned_technician_id', technicianId)
   }
 
   if (ticketType === 'service') {
