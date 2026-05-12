@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import ServiceStatusBadge from '@/components/ServiceStatusBadge'
 import { ServiceTicketDetail } from './ServiceTicketDetail'
+import AuditHistorySection from '@/components/AuditHistorySection'
 import type { ServiceTicketStatus } from '@/types/service-tickets'
 
 const WORKFLOW_STEPS: ServiceTicketStatus[] = ['open', 'estimated', 'approved', 'in_progress', 'completed', 'billed']
@@ -119,6 +120,8 @@ export default async function ServiceTicketPage({
         userId={user.id}
         laborRate={laborRate}
       />
+
+      <AuditHistorySection entityType="service_tickets" entityId={ticket.id} />
     </div>
   )
 }

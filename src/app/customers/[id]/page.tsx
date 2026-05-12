@@ -8,6 +8,7 @@ import CreditHoldBadge from '@/components/CreditHoldBadge'
 import ActiveToggle from './ActiveToggle'
 import ShowPricingToggle from './ShowPricingToggle'
 import AutoApproveThresholdInput from './AutoApproveThresholdInput'
+import AuditHistorySection from '@/components/AuditHistorySection'
 
 export default async function CustomerDetailPage({
   params,
@@ -235,6 +236,8 @@ export default async function CustomerDetailPage({
           </div>
         )}
       </div>
+
+      <AuditHistorySection entityType="customers" entityId={String(customerId)} />
     </div>
   )
 }

@@ -73,6 +73,8 @@ export async function POST(request: NextRequest) {
         role,
         active: true,
         must_change_password: true,
+        created_by_id: currentUser.id,
+        updated_by_id: currentUser.id,
       })
       .select()
       .single()

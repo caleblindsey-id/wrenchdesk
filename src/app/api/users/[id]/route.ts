@@ -58,6 +58,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'No updatable fields supplied.' }, { status: 400 })
     }
 
+    update.updated_by_id = currentUser.id
+
     const admin = createAdminClient()
     const { data: user, error } = await admin
       .from('users')

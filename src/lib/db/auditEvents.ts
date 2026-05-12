@@ -1,0 +1,119 @@
+import { createClient } from '@/lib/supabase/server'
+import type {
+  AuditEvent,
+  AuditEventWithActor,
+  AuditActorType,
+  AuditAction,
+} from '@/lib/audit/format'
+
+// The audit_events table is created by migration 058 — it isn't yet known to
+// the Supabase generated types. Cast .from() through `unknown` per the
+// existing pattern (e.g. tickets.ts:233). Once `supabase gen types` runs
+// after the migration applies, the casts can drop.
+
+export type AuditFilters = {
+  entityType?: string
+  entityId?: string
+  changedBy?: string
+  action?: AuditAction
+  actorType?: AuditActorType
+  startDate?: string
+  endDate?: string
+  limit?: number
+  offset?: number
+}
+
+type AuditEventRow = AuditEvent & {
+  user_actor: { id: string; name: string; role: string | null } | null
+}
+
+function rowToEvent(row: AuditEventRow): AuditEventWithActor {
+  const { user_actor, ...rest } = row
+  return { ...rest, actor: user_actor }
+}
+
+// Loosely-typed builder helper so we don't fight the generated types for a
+// table that isn't generated yet.
+function audit(supabase: Awaited<ReturnType<typeof createClient>>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (supabase as any).from('audit_events')
+}
+
+export async function listAuditEvents(
+  filters: AuditFilters = {}
+): Promise<{ events: AuditEventWithActor[]; total: number }> {
+  const supabase = await createClient()
+  const limit = filters.limit ?? 50
+  const offset = filters.offset ?? 0
+
+  let query = audit(supabase)
+    .select(
+      `
+        id, occurred_at, entity_type, entity_id, action,
+        actor_type, changed_by, actor_label, changes, context,
+        user_actor:users!audit_events_changed_by_fkey(id, name, role)
+      `,
+      { count: 'exact' }
+    )
+    .order('occurred_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (filters.entityType) query = query.eq('entity_type', filters.entityType)
+  if (filters.entityId) query = query.eq('entity_id', filters.entityId)
+  if (filters.changedBy) query = query.eq('changed_by', filters.changedBy)
+  if (filters.action) query = query.eq('action', filters.action)
+  if (filters.actorType) query = query.eq('actor_type', filters.actorType)
+  if (filters.startDate) query = query.gte('occurred_at', filters.startDate)
+  if (filters.endDate) query = query.lt('occurred_at', filters.endDate)
+
+  const { data, error, count } = await query
+  if (error) {
+    console.error('listAuditEvents error:', error)
+    return { events: [], total: 0 }
+  }
+
+  const events = ((data as AuditEventRow[] | null) ?? []).map(rowToEvent)
+  return { events, total: count ?? 0 }
+}
+
+export async function listAuditEventsForEntity(
+  entityType: string,
+  entityId: string,
+  limit: number = 50
+): Promise<AuditEventWithActor[]> {
+  const { events } = await listAuditEvents({ entityType, entityId, limit })
+  return events
+}
+
+export async function listAuditActors(): Promise<
+  Array<{ id: string; name: string }>
+> {
+  const supabase = await createClient()
+  const { data: ids, error: idsError } = await audit(supabase)
+    .select('changed_by')
+    .not('changed_by', 'is', null)
+    .limit(2000)
+  if (idsError) {
+    console.error('listAuditActors ids error:', idsError)
+    return []
+  }
+  const unique = Array.from(
+    new Set(
+      ((ids as Array<{ changed_by: string | null }> | null) ?? [])
+        .map((r) => r.changed_by)
+        .filter((v): v is string => !!v)
+    )
+  )
+  if (unique.length === 0) return []
+
+  const { data: users, error: usersError } = await supabase
+    .from('users')
+    .select('id, name')
+    .in('id', unique.slice(0, 200))
+    .order('name')
+  if (usersError) {
+    console.error('listAuditActors users error:', usersError)
+    return []
+  }
+  return (users ?? []) as Array<{ id: string; name: string }>
+}

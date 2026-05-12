@@ -13,6 +13,7 @@ import ReviewBanner from './ReviewBanner'
 import ChangeLocationSection from './ChangeLocationSection'
 import ServiceHistory from '@/components/ServiceHistory'
 import EquipmentNotes from '@/components/EquipmentNotes'
+import AuditHistorySection from '@/components/AuditHistorySection'
 import { getCurrentUser, isTechnician, RESET_ROLES } from '@/lib/auth'
 import { pmTicketToHistoryItem } from '@/types/service-tickets'
 import { getLaborRate } from '@/lib/db/settings'
@@ -323,6 +324,8 @@ export default async function TicketDetailPage({
       {ticket.equipment_id && (
         <EquipmentNotes equipmentId={ticket.equipment_id} />
       )}
+
+      <AuditHistorySection entityType="pm_tickets" entityId={ticket.id} />
     </div>
   )
 }

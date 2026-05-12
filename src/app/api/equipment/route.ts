@@ -103,6 +103,8 @@ export async function POST(request: NextRequest) {
         contact_email: str('contact_email', MAX_EMAIL),
         contact_phone: str('contact_phone', 50),
         active: true,
+        created_by_id: user.id,
+        updated_by_id: user.id,
       })
       .select()
       .single()

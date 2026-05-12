@@ -19,6 +19,7 @@ import {
   UserRoundSearch,
   KeyRound,
   Award,
+  ScrollText,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/components/UserProvider'
@@ -39,6 +40,7 @@ const allNavItems = [
 
 const adminNavItems = [
   { label: 'Settings', icon: Settings, route: '/settings' },
+  { label: 'Audit Log', icon: ScrollText, route: '/admin/audit-log' },
 ]
 
 const techNavItems = [

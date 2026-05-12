@@ -11,6 +11,7 @@ import ScheduleSection from './ScheduleSection'
 import DefaultProductsSection from './DefaultProductsSection'
 import ServiceHistory from '@/components/ServiceHistory'
 import EquipmentNotes from '@/components/EquipmentNotes'
+import AuditHistorySection from '@/components/AuditHistorySection'
 import { pmTicketToHistoryItem } from '@/types/service-tickets'
 import type { ServiceHistoryItem } from '@/types/service-tickets'
 
@@ -107,6 +108,8 @@ export default async function EquipmentDetailPage({
       <ServiceHistory items={allHistory} showBilling={showBilling} />
 
       <EquipmentNotes equipmentId={equipment.id} />
+
+      <AuditHistorySection entityType="equipment" entityId={equipment.id} />
     </div>
   )
 }

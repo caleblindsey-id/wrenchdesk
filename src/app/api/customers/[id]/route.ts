@@ -61,7 +61,7 @@ export async function PATCH(
     const supabase = createAdminClient()
     const { error } = await supabase
       .from('customers')
-      .update(update)
+      .update({ ...update, updated_by_id: user.id })
       .eq('id', customerId)
 
     if (error) {
