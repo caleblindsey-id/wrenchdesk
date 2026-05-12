@@ -5,8 +5,14 @@
 -- no way to answer "who changed what when" — status transitions on PM and
 -- service tickets are invisible, equipment inline edits leave no trace,
 -- customer credit-hold flips are not logged, etc. This migration installs a
--- single generic audit table + one trigger function reused across the seven
+-- single generic audit table + one trigger function reused across the six
 -- highest-value tables.
+--
+-- Note on parts: the `parts_order_queue` is a VIEW over
+-- `pm_tickets.parts_requested` and `service_tickets.parts_requested` JSONB
+-- columns. Every parts-queue mutation is therefore an UPDATE on the parent
+-- ticket and surfaces naturally in that ticket's audit row as a `changes`
+-- diff on the `parts_requested` column.
 --
 -- Design notes:
 --   1. ONE table, audit_events, indexed for the two read surfaces we ship
@@ -55,9 +61,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 
 COMMENT ON TABLE audit_events IS
-  'Append-only change log for the seven core entities (service_tickets, '
-  'pm_tickets, equipment, pm_schedules, customers, users, parts_order_queue). '
-  'Written exclusively by the audit_capture() trigger function. '
+  'Append-only change log for the six core entities (service_tickets, '
+  'pm_tickets, equipment, pm_schedules, customers, users). Parts queue '
+  'mutations are captured indirectly via the parent ticket''s parts_requested '
+  'JSONB diff. Written exclusively by the audit_capture() trigger function. '
   'Visibility: super_admin only via RLS.';
 
 COMMENT ON COLUMN audit_events.entity_type IS
@@ -272,9 +279,4 @@ CREATE TRIGGER zz_audit_customers_trg
 DROP TRIGGER IF EXISTS zz_audit_users_trg ON users;
 CREATE TRIGGER zz_audit_users_trg
   AFTER INSERT OR UPDATE OR DELETE ON users
-  FOR EACH ROW EXECUTE FUNCTION audit_capture();
-
-DROP TRIGGER IF EXISTS zz_audit_parts_order_queue_trg ON parts_order_queue;
-CREATE TRIGGER zz_audit_parts_order_queue_trg
-  AFTER INSERT OR UPDATE OR DELETE ON parts_order_queue
   FOR EACH ROW EXECUTE FUNCTION audit_capture();
