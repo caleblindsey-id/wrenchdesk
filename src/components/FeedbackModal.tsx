@@ -18,13 +18,18 @@ const MAX_BODY = 4000
 
 interface FeedbackModalProps {
   onClose: () => void
+  initialAttachment?: Blob | null
 }
 
-export default function FeedbackModal({ onClose }: FeedbackModalProps) {
+export default function FeedbackModal({ onClose, initialAttachment }: FeedbackModalProps) {
   const pathname = usePathname()
   const [category, setCategory] = useState<Category>('bug')
   const [body, setBody] = useState('')
-  const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string } | null>(null)
+  const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string } | null>(() =>
+    initialAttachment
+      ? { blob: initialAttachment, previewUrl: URL.createObjectURL(initialAttachment) }
+      : null
+  )
   const [attachError, setAttachError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
