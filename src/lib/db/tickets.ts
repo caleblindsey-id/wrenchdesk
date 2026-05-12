@@ -3,6 +3,18 @@ import { PmTicketRow, PmTicketUpdate, TicketStatus, PartUsed, TicketPhoto, Billi
 import { OVERDUE_ELIGIBLE_STATUSES } from '@/lib/overdue'
 import { calcNextServiceMonth } from '@/lib/utils/schedule'
 
+// Display order for the PM tickets list. Work-in-flight first, manager-action
+// next, closed-out last. Drives the grouping in getTickets().
+const STATUS_RANK: Record<TicketStatus, number> = {
+  unassigned: 0,
+  assigned: 1,
+  in_progress: 2,
+  skip_requested: 3,
+  completed: 4,
+  billed: 5,
+  skipped: 6,
+}
+
 export type TicketWithJoins = PmTicketRow & {
   customers: { name: string; billing_city: string | null; po_required: boolean; ar_terms: string | null; credit_hold: boolean } | null
   equipment: { make: string | null; model: string | null; ship_to_locations: { name: string | null; address: string | null; city: string | null } | null } | null
@@ -64,7 +76,6 @@ export async function getTickets(filters?: {
       users!assigned_technician_id(name),
       pm_schedules(interval_months, anchor_month)
     `)
-    .order('created_at', { ascending: false })
 
   if (filters?.deletedOnly) {
     query = query.not('deleted_at', 'is', null)
@@ -104,7 +115,21 @@ export async function getTickets(filters?: {
   const { data, error } = await query
 
   if (error) throw error
-  return data as unknown as TicketWithJoins[]
+
+  const rows = (data ?? []) as unknown as TicketWithJoins[]
+  rows.sort((a, b) => {
+    const sa = STATUS_RANK[a.status] ?? 99
+    const sb = STATUS_RANK[b.status] ?? 99
+    if (sa !== sb) return sa - sb
+
+    const ca = a.customers?.name ?? '￿'
+    const cb = b.customers?.name ?? '￿'
+    const c = ca.localeCompare(cb, undefined, { sensitivity: 'base' })
+    if (c !== 0) return c
+
+    return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+  })
+  return rows
 }
 
 export async function getBillingTickets(
