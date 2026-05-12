@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Menu, Wrench } from 'lucide-react'
 import Sidebar from './Sidebar'
+import FeedbackFAB from './FeedbackFAB'
 import { APP_NAME } from '@/lib/branding'
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
@@ -44,6 +45,8 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       <main className="lg:ml-60 min-h-full pt-14 lg:pt-0">
         {children}
       </main>
+
+      <FeedbackFAB />
     </>
   )
 }

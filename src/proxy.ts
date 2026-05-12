@@ -19,6 +19,7 @@ const TECH_ALLOWED_API_PATTERNS = [
   /^\/api\/equipment\/[^/]+\/notes$/,                        // GET + POST /api/equipment/[id]/notes
   /^\/api\/tech-leads(\/|$)/,                                // POST /api/tech-leads (Submit Lead modal)
   /^\/api\/ship-to-requests(\/|$)/,                          // POST /api/ship-to-requests (request new ship-to)
+  /^\/api\/feedback$/,                                       // POST /api/feedback (FAB submission — all roles)
 ]
 
 function isTechAllowed(pathname: string): boolean {
