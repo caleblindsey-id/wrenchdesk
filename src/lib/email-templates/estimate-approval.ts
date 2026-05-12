@@ -87,10 +87,16 @@ export function renderEstimateApprovalEmail(
               }
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
                 <tr>
-                  <td style="background:#0f172a;border-radius:6px;">
-                    <a href="${escapeAttr(approvalUrl)}" style="display:inline-block;padding:12px 28px;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;">
-                      Review your estimate
-                    </a>
+                  <td>
+                    <!--[if mso]>
+                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${escapeAttr(approvalUrl)}" style="height:44px;v-text-anchor:middle;width:220px;" arcsize="14%" stroke="f" fillcolor="#0f172a">
+                      <w:anchorlock/>
+                      <center style="color:#ffffff;font-family:'Segoe UI',Arial,sans-serif;font-size:15px;font-weight:600;">Review your estimate</center>
+                    </v:roundrect>
+                    <![endif]-->
+                    <!--[if !mso]><!-- -->
+                    <a href="${escapeAttr(approvalUrl)}" style="background:#0f172a;border-radius:6px;color:#ffffff;display:inline-block;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:600;line-height:44px;text-align:center;text-decoration:none;width:220px;mso-hide:all;">Review your estimate</a>
+                    <!--<![endif]-->
                   </td>
                 </tr>
               </table>
