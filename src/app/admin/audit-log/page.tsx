@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { requireRole } from '@/lib/auth'
-import { listAuditEvents, listAuditActors } from '@/lib/db/auditEvents'
+import { listAuditEvents, listAuditActors, findTicketsByWorkOrder } from '@/lib/db/auditEvents'
 import {
   ENTITY_LABELS,
   ENTITY_TYPES,
@@ -22,6 +22,7 @@ type SearchParams = {
   actor_type?: string
   start?: string
   end?: string
+  wo?: string
   page?: string
 }
 
@@ -65,16 +66,31 @@ export default async function AuditLogPage({
     }
   }
 
+  // WO# resolution: server-side lookup of pm_tickets + service_tickets by
+  // work_order_number, then pass the matching UUIDs into the entityIds filter.
+  let entityIds: string[] | undefined
+  let woUnmatched = false
+  if (params.wo) {
+    const woNum = parseInt(params.wo, 10)
+    if (Number.isFinite(woNum) && woNum > 0) {
+      entityIds = await findTicketsByWorkOrder(woNum)
+      if (entityIds.length === 0) woUnmatched = true
+    } else {
+      woUnmatched = true
+      entityIds = []
+    }
+  }
+
   const [{ events, total }, actors] = await Promise.all([
     listAuditEvents({
-      entityType, changedBy, action, actorType, startDate, endDate,
+      entityType, entityIds, changedBy, action, actorType, startDate, endDate,
       limit: PAGE_SIZE, offset,
     }),
     listAuditActors(),
   ])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const hasFilters = Boolean(entityType || changedBy || action || actorType || startDate || params.end)
+  const hasFilters = Boolean(entityType || changedBy || action || actorType || startDate || params.end || params.wo)
 
   return (
     <div className="p-6 space-y-6">
@@ -87,8 +103,20 @@ export default async function AuditLogPage({
 
       <form
         method="GET"
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 p-4 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 p-4 rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
       >
+        <label className="text-sm">
+          <span className="block text-gray-500 dark:text-gray-400 mb-1">WO #</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            name="wo"
+            placeholder="e.g. 1842"
+            defaultValue={params.wo ?? ''}
+            className="w-full px-2 py-1.5 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+          />
+        </label>
+
         <label className="text-sm">
           <span className="block text-gray-500 dark:text-gray-400 mb-1">Entity</span>
           <select
@@ -166,10 +194,15 @@ export default async function AuditLogPage({
           />
         </label>
 
-        <div className="sm:col-span-2 lg:col-span-6 flex items-center justify-between gap-3">
+        <div className="sm:col-span-2 lg:col-span-7 flex items-center justify-between gap-3">
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {total.toLocaleString()} event{total === 1 ? '' : 's'}
             {hasFilters ? ' matching filters' : ' total'}
+            {woUnmatched && (
+              <span className="ml-2 text-amber-600 dark:text-amber-400">
+                No ticket found for WO #{params.wo}.
+              </span>
+            )}
           </p>
           <div className="flex items-center gap-2">
             {hasFilters && (

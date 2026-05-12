@@ -14,6 +14,7 @@ import type {
 export type AuditFilters = {
   entityType?: string
   entityId?: string
+  entityIds?: string[]  // restricts entity_id to this set (used for WO# resolution)
   changedBy?: string
   action?: AuditAction
   actorType?: AuditActorType
@@ -60,6 +61,11 @@ export async function listAuditEvents(
 
   if (filters.entityType) query = query.eq('entity_type', filters.entityType)
   if (filters.entityId) query = query.eq('entity_id', filters.entityId)
+  if (filters.entityIds) {
+    // Empty list = no possible match. Force zero results without round-tripping.
+    if (filters.entityIds.length === 0) return { events: [], total: 0 }
+    query = query.in('entity_id', filters.entityIds)
+  }
   if (filters.changedBy) query = query.eq('changed_by', filters.changedBy)
   if (filters.action) query = query.eq('action', filters.action)
   if (filters.actorType) query = query.eq('actor_type', filters.actorType)
@@ -83,6 +89,25 @@ export async function listAuditEventsForEntity(
 ): Promise<AuditEventWithActor[]> {
   const { events } = await listAuditEvents({ entityType, entityId, limit })
   return events
+}
+
+/**
+ * Resolve a work-order number to the matching pm_ticket / service_ticket UUIDs.
+ * WO# is INTEGER and unique across both tables (shared `pm_tickets_wo_seq`),
+ * but we query both for safety. Returns the entity_id strings to drop into
+ * an audit_events.in('entity_id', ...) filter.
+ */
+export async function findTicketsByWorkOrder(wo: number): Promise<string[]> {
+  if (!Number.isFinite(wo) || wo <= 0) return []
+  const supabase = await createClient()
+  const [pm, st] = await Promise.all([
+    supabase.from('pm_tickets').select('id').eq('work_order_number', wo).limit(5),
+    supabase.from('service_tickets').select('id').eq('work_order_number', wo).limit(5),
+  ])
+  const ids: string[] = []
+  for (const row of pm.data ?? []) ids.push((row as { id: string }).id)
+  for (const row of st.data ?? []) ids.push((row as { id: string }).id)
+  return ids
 }
 
 export async function listAuditActors(): Promise<
