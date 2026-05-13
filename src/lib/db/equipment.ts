@@ -78,6 +78,8 @@ export async function getEquipmentByCustomer(customerId: number): Promise<Equipm
 export async function getEquipmentDetail(id: string): Promise<EquipmentDetail | null> {
   const supabase = await createClient()
 
+  type EquipmentBase = Omit<EquipmentDetail, 'pm_tickets'>
+
   // Fetch equipment with schedules first
   const { data: equipmentData, error: equipmentError } = await supabase
     .from('equipment')
@@ -87,12 +89,15 @@ export async function getEquipmentDetail(id: string): Promise<EquipmentDetail | 
       pm_schedules(*)
     `)
     .eq('id', id)
+    .returns<EquipmentBase[]>()
     .single()
 
   if (equipmentError) {
     if (equipmentError.code === 'PGRST116') return null
     throw equipmentError
   }
+  if (!equipmentData) return null
+  const base = equipmentData satisfies EquipmentBase
 
   // Fetch the last 12 tickets separately to avoid nested limit syntax issues
   const { data: tickets, error: ticketsError } = await supabase
@@ -102,13 +107,14 @@ export async function getEquipmentDetail(id: string): Promise<EquipmentDetail | 
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(12)
+    .returns<PmTicketRow[]>()
 
   if (ticketsError) throw ticketsError
 
   return {
-    ...(equipmentData as Record<string, unknown>),
+    ...base,
     pm_tickets: tickets ?? [],
-  } as unknown as EquipmentDetail
+  }
 }
 
 export async function getEquipmentServiceHistory(
