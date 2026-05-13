@@ -105,6 +105,15 @@ export type SalesRepInsert = Pick<SalesRep, 'name' | 'email'> &
   Partial<Pick<SalesRep, 'kind' | 'title' | 'active' | 'updated_by_id' | 'created_by_id'>>
 export type SalesRepUpdate = Partial<Pick<SalesRep, 'name' | 'email' | 'kind' | 'title' | 'active' | 'updated_by_id'>>
 
+export type Vendor = {
+  code: number
+  name: string
+  synced_at: string
+}
+
+export type VendorInsert = Pick<Vendor, 'code' | 'name'> & Partial<Pick<Vendor, 'synced_at'>>
+export type VendorUpdate = Partial<Pick<Vendor, 'name' | 'synced_at'>>
+
 // ============================================================
 // JSONB Part type
 // ============================================================
@@ -927,6 +936,12 @@ export interface Database {
         Row: SalesRep
         Insert: SalesRepInsert
         Update: SalesRepUpdate
+        Relationships: []
+      }
+      vendors: {
+        Row: Vendor
+        Insert: VendorInsert
+        Update: VendorUpdate
         Relationships: []
       }
     }
