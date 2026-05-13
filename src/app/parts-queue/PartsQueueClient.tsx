@@ -13,6 +13,7 @@ import {
   updatePartFields,
 } from '@/lib/parts-queue'
 import CancelPartDialog from './CancelPartDialog'
+import VendorPicker from '@/components/VendorPicker'
 import { formatDateTime } from '@/lib/format'
 
 type Tab = 'to_order' | 'ordered' | 'received'
@@ -44,6 +45,7 @@ function partToRow(row: PartsQueueRow, part: PartRequest): PartsQueueRow {
     description: part.description ?? row.description,
     quantity: part.quantity ?? row.quantity,
     vendor: part.vendor ?? null,
+    vendor_code: part.vendor_code ?? null,
     product_number: part.product_number ?? null,
     synergy_product_id: part.synergy_product_id ?? null,
     vendor_item_code: part.vendor_item_code ?? null,
@@ -185,15 +187,11 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
     flash(rowKey(row))
   }, [flash])
 
-  const handleFieldBlur = useCallback(async (row: PartsQueueRow, field: keyof PartRequest, value: string) => {
-    const trimmed = value.trim()
-    const current = (row[field as keyof PartsQueueRow] ?? '') as string
-    if (trimmed === (current ?? '')) return
+  const handleFieldsCommit = useCallback(async (row: PartsQueueRow, fields: Partial<PartRequest>) => {
     const key = rowKey(row)
     setPendingRow(key)
     setError(null)
     try {
-      const fields: Partial<PartRequest> = { [field]: trimmed || undefined } as Partial<PartRequest>
       const part = await updatePartFields(row.source, row.ticket_id, row.part_index, fields)
       applyUpdate(row, part)
     } catch (err) {
@@ -203,6 +201,14 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
       setPendingRow(cur => (cur === key ? null : cur))
     }
   }, [applyUpdate, router])
+
+  const handleFieldBlur = useCallback(async (row: PartsQueueRow, field: keyof PartRequest, value: string) => {
+    const trimmed = value.trim()
+    const current = (row[field as keyof PartsQueueRow] ?? '') as string
+    if (trimmed === (current ?? '')) return
+    const fields: Partial<PartRequest> = { [field]: trimmed || undefined } as Partial<PartRequest>
+    await handleFieldsCommit(row, fields)
+  }, [handleFieldsCommit])
 
   const handleMarkOrdered = useCallback(async (row: PartsQueueRow) => {
     const key = rowKey(row)
@@ -370,12 +376,13 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
                     </td>
                     <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{row.quantity ?? 1}</td>
                     <td className="px-3 py-2">
-                      <InlineText
-                        value={row.vendor ?? ''}
-                        placeholder="Vendor"
+                      <VendorPicker
+                        vendor={row.vendor}
+                        vendorCode={row.vendor_code}
                         disabled={!canEditFields || isPending}
-                        onBlurCommit={v => handleFieldBlur(row, 'vendor', v)}
-                        widthClass="w-28"
+                        onChange={picked =>
+                          handleFieldsCommit(row, { vendor: picked.vendor, vendor_code: picked.vendor_code })
+                        }
                       />
                     </td>
                     <td className="px-3 py-2">

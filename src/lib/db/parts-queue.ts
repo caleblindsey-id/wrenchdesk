@@ -9,7 +9,7 @@ import type { PartsQueueRow } from '@/types/database'
 const QUEUE_COLUMNS = `
   source, ticket_id, work_order_number, part_index,
   customer_name, assigned_technician_name,
-  requested_at, description, quantity, vendor,
+  requested_at, description, quantity, vendor, vendor_code,
   product_number, synergy_product_id, vendor_item_code, po_number,
   status, cancelled, cancel_reason,
   ordered_at, received_at, ordered_by, received_by

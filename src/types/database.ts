@@ -149,8 +149,13 @@ export interface PartRequest {
   vendor_item_code?: string
   po_number?: string
   status: 'requested' | 'ordered' | 'received'
-  // Vendor the part comes from (free-text, surfaced on the Parts Queue page).
+  // Vendor the part comes from. Written by VendorPicker from the Synergy
+  // a80vm vendor master (migration 069). Legacy rows may have free-text
+  // `vendor` with no `vendor_code` — re-pick to link.
   vendor?: string
+  // Synergy a80vm.VendorCode as a string. Paired with `vendor` when picked
+  // via VendorPicker; absent on legacy free-text rows.
+  vendor_code?: string
   // Parts Queue lifecycle metadata — optional; pre-036 rows won't have these.
   requested_at?: string
   ordered_at?: string
@@ -187,6 +192,7 @@ export type PartsQueueRow = {
   description: string | null
   quantity: number | null
   vendor: string | null
+  vendor_code: string | null
   product_number: string | null
   synergy_product_id: number | null
   vendor_item_code: string | null

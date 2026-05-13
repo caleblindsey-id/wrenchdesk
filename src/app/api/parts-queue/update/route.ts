@@ -24,6 +24,7 @@ function tableFor(source: Source): 'pm_tickets' | 'service_tickets' {
 // mark_received / cancel / reopen branches so the audit trail can't be forged.
 const PATCH_FIELDS: ReadonlySet<keyof PartRequest> = new Set([
   'vendor',
+  'vendor_code',
   'product_number',
   'vendor_item_code',
   'po_number',
@@ -31,6 +32,7 @@ const PATCH_FIELDS: ReadonlySet<keyof PartRequest> = new Set([
 
 const FIELD_MAX_LEN: Partial<Record<keyof PartRequest, number>> = {
   vendor: 200,
+  vendor_code: 32,
   product_number: 100,
   vendor_item_code: 100,
   po_number: 100,
