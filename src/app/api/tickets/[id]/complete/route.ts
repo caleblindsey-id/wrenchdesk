@@ -205,30 +205,12 @@ export async function POST(
     const customerRow = Array.isArray(customerJoin) ? customerJoin[0] : customerJoin
     const showPricingSnapshot = customerRow?.show_pricing_on_pm_pdf ?? false
 
-    const updated = await completeTicket(id, {
-      completedDate,
-      hoursWorked,
-      partsUsed: finalParts,
-      completionNotes: completionNotes ?? '',
-      billingAmount: finalBillingAmount,
-      customerSignature,
-      customerSignatureName,
-      photos: photos ?? [],
-      poNumber: poNumber ?? null,
-      billingContactName: billingContactName ?? null,
-      billingContactEmail: billingContactEmail ?? null,
-      billingContactPhone: billingContactPhone ?? null,
-      additionalPartsUsed: finalAdditionalParts,
-      additionalHoursWorked: finalAdditionalHours,
-      machineHours,
-      dateCode: dateCode.trim(),
-      showPricing: showPricingSnapshot,
-    })
-
-    // ACE labor (tech-payout). One row per ticket — partial unique index on
-    // pm_ticket_id enforces it. On re-completion (after manager reset) we let
-    // the tech overwrite a pending/rejected entry, but refuse if the entry
-    // has already been approved or paid (audit-stable).
+    // ACE labor (tech-payout) is written BEFORE the ticket transitions to
+    // completed. There is no DB transaction across these two writes, so we
+    // intentionally order ACE first: if it fails we 500 with the ticket
+    // unchanged and the tech can retry safely. The partial unique index on
+    // pm_ticket_id makes the retry an in-place update of the existing pending
+    // row, so an orphan from a partial run never blocks future attempts.
     if (aceLabor != null) {
       const { data: existing, error: existingErr } = await supabase
         .from('ace_labor_entries')
@@ -237,12 +219,18 @@ export async function POST(
         .maybeSingle()
       if (existingErr) {
         console.error(`[complete] ACE lookup failed for ticket ${id}:`, existingErr)
-      } else if (existing && (existing.status === 'approved' || existing.status === 'paid')) {
+        return NextResponse.json(
+          { error: 'Failed to read existing ACE labor entry.' },
+          { status: 500 }
+        )
+      }
+      if (existing && (existing.status === 'approved' || existing.status === 'paid')) {
         return NextResponse.json(
           { error: 'ACE labor entry already approved/paid; cannot be changed here.' },
           { status: 409 }
         )
-      } else if (existing) {
+      }
+      if (existing) {
         const { error: updErr } = await supabase
           .from('ace_labor_entries')
           .update({
@@ -260,6 +248,10 @@ export async function POST(
           .eq('id', existing.id)
         if (updErr) {
           console.error(`[complete] ACE update failed for ticket ${id}:`, updErr)
+          return NextResponse.json(
+            { error: 'Failed to save ACE labor entry.' },
+            { status: 500 }
+          )
         }
       } else {
         // tech_id must point at the assigned technician, not the user
@@ -281,9 +273,33 @@ export async function POST(
           })
         if (insErr) {
           console.error(`[complete] ACE insert failed for ticket ${id}:`, insErr)
+          return NextResponse.json(
+            { error: 'Failed to create ACE labor entry.' },
+            { status: 500 }
+          )
         }
       }
     }
+
+    const updated = await completeTicket(id, {
+      completedDate,
+      hoursWorked,
+      partsUsed: finalParts,
+      completionNotes: completionNotes ?? '',
+      billingAmount: finalBillingAmount,
+      customerSignature,
+      customerSignatureName,
+      photos: photos ?? [],
+      poNumber: poNumber ?? null,
+      billingContactName: billingContactName ?? null,
+      billingContactEmail: billingContactEmail ?? null,
+      billingContactPhone: billingContactPhone ?? null,
+      additionalPartsUsed: finalAdditionalParts,
+      additionalHoursWorked: finalAdditionalHours,
+      machineHours,
+      dateCode: dateCode.trim(),
+      showPricing: showPricingSnapshot,
+    })
 
     // Slide billing period to completion month if work happened in a different month
     const completedMonth = completionDate.getUTCMonth() + 1

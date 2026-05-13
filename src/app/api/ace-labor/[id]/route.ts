@@ -51,7 +51,7 @@ export async function PATCH(
     const supabase = await createClient()
     const { data: existing, error: fetchErr } = await supabase
       .from('ace_labor_entries')
-      .select('id, status')
+      .select('id, status, tech_id')
       .eq('id', id)
       .maybeSingle()
     if (fetchErr) {
@@ -60,6 +60,11 @@ export async function PATCH(
     }
     if (!existing) {
       return NextResponse.json({ error: 'Entry not found.' }, { status: 404 })
+    }
+    // Defense-in-depth: RLS already restricts a tech to their own rows, but
+    // assert ownership here too so a future policy slip doesn't open the route.
+    if (existing.tech_id !== user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     if (existing.status !== 'pending' && existing.status !== 'rejected') {
       return NextResponse.json(

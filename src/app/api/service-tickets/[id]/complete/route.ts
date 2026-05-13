@@ -137,20 +137,9 @@ export async function POST(
     // Round to cents to avoid stored vs. displayed drift.
     finalBillingAmount = Math.round(finalBillingAmount * 100) / 100
 
-    const updated = await completeServiceTicket(id, {
-      completed_at,
-      hours_worked,
-      parts_used: finalParts,
-      completion_notes: completion_notes ?? null,
-      billing_amount: finalBillingAmount,
-      customer_signature: customer_signature ?? null,
-      customer_signature_name: customer_signature_name ?? null,
-      photos: photos ?? [],
-      warranty_labor_covered: body.warranty_labor_covered,
-    })
-
-    // ACE labor — see PM /complete for the upsert pattern (audit-stable on
-    // re-completion, blocks overwrite of approved/paid entries).
+    // ACE labor — write BEFORE the ticket transitions to completed so a failure
+    // returns 500 with the ticket unchanged. See PM /complete for the full
+    // rationale on ordering and retry safety.
     if (ace_labor != null) {
       const { data: existing, error: existingErr } = await supabase
         .from('ace_labor_entries')
@@ -159,12 +148,18 @@ export async function POST(
         .maybeSingle()
       if (existingErr) {
         console.error(`[complete] ACE lookup failed for service ticket ${id}:`, existingErr)
-      } else if (existing && (existing.status === 'approved' || existing.status === 'paid')) {
+        return NextResponse.json(
+          { error: 'Failed to read existing ACE labor entry.' },
+          { status: 500 }
+        )
+      }
+      if (existing && (existing.status === 'approved' || existing.status === 'paid')) {
         return NextResponse.json(
           { error: 'ACE labor entry already approved/paid; cannot be changed here.' },
           { status: 409 }
         )
-      } else if (existing) {
+      }
+      if (existing) {
         const { error: updErr } = await supabase
           .from('ace_labor_entries')
           .update({
@@ -180,7 +175,13 @@ export async function POST(
             updated_by_id: user.id,
           })
           .eq('id', existing.id)
-        if (updErr) console.error(`[complete] ACE update failed for service ticket ${id}:`, updErr)
+        if (updErr) {
+          console.error(`[complete] ACE update failed for service ticket ${id}:`, updErr)
+          return NextResponse.json(
+            { error: 'Failed to save ACE labor entry.' },
+            { status: 500 }
+          )
+        }
       } else {
         // tech_id must point at the assigned technician, not the user
         // submitting completion. See PM /complete for full rationale.
@@ -196,9 +197,27 @@ export async function POST(
             status: 'pending',
             created_by_id: user.id,
           })
-        if (insErr) console.error(`[complete] ACE insert failed for service ticket ${id}:`, insErr)
+        if (insErr) {
+          console.error(`[complete] ACE insert failed for service ticket ${id}:`, insErr)
+          return NextResponse.json(
+            { error: 'Failed to create ACE labor entry.' },
+            { status: 500 }
+          )
+        }
       }
     }
+
+    const updated = await completeServiceTicket(id, {
+      completed_at,
+      hours_worked,
+      parts_used: finalParts,
+      completion_notes: completion_notes ?? null,
+      billing_amount: finalBillingAmount,
+      customer_signature: customer_signature ?? null,
+      customer_signature_name: customer_signature_name ?? null,
+      photos: photos ?? [],
+      warranty_labor_covered: body.warranty_labor_covered,
+    })
 
     return NextResponse.json(updated)
   } catch (err) {

@@ -1224,6 +1224,7 @@ export default function TicketActions({ ticket, userRole, userId, laborRate }: T
                 <button
                   type="button"
                   onClick={() => setAceLaborOpen(true)}
+                  aria-expanded={false}
                   className="text-sm font-medium text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-200"
                 >
                   + Add ACE Labor
