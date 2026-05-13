@@ -1,54 +1,13 @@
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer'
 import { APP_NAME } from '@/lib/branding'
+import type { BillingTicket, PartLine } from '@/types/billing'
 
 // ============================================================
 // Types
 // ============================================================
 
-interface PartLine {
-  productNumber: string | null
-  description: string
-  quantity: number
-  unit_price: number
-}
-
-interface BillingTicket {
-  id: string
-  workOrderNumber: number
-  customerName: string
-  accountNumber: string | null
-  billingAddress: string | null
-  serviceLocation: string | null
-  arTerms: string | null
-  equipmentMake: string | null
-  equipmentModel: string | null
-  serialNumber: string | null
-  locationOnSite: string | null
-  equipmentContactName: string | null
-  equipmentContactEmail: string | null
-  equipmentContactPhone: string | null
-  technicianName: string
-  completedDate: string
-  hoursWorked: number | null
-  machineHours: number | null
-  dateCode: string | null
-  completionNotes: string | null
-  partsUsed: PartLine[]
-  additionalPartsUsed: PartLine[]
-  additionalHoursWorked: number | null
-  laborRate: number
-  billingAmount: number | null
-  billingType: string | null
-  flatRate: number | null
-  poRequired: boolean
-  poNumber: string | null
-  billingContactName: string | null
-  billingContactEmail: string | null
-  billingContactPhone: string | null
-  customerSignature: string | null
-  customerSignatureName: string | null
-  photoUrls: string[]
-}
+// BillingTicket + PartLine live in @/types/billing — re-export for back-compat
+export type { BillingTicket, PartLine }
 
 interface BillingDocumentProps {
   tickets: BillingTicket[]

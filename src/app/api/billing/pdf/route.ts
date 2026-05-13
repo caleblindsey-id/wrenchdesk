@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import React from 'react'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { BillingDocument } from '@/lib/pdf/billing-template'
+import type { BillingTicket, PartLine } from '@/types/billing'
 import { createClient } from '@/lib/supabase/server'
 import { getSetting, getLaborRate } from '@/lib/db/settings'
 import { getUser } from '@/lib/db/users'
@@ -17,50 +18,7 @@ import { APP_NAME } from '@/lib/branding'
 // Types
 // ============================================================
 
-interface PartLine {
-  productNumber: string | null
-  description: string
-  quantity: number
-  unit_price: number
-}
-
-interface BillingTicket {
-  id: string
-  workOrderNumber: number
-  customerName: string
-  accountNumber: string | null
-  billingAddress: string | null
-  serviceLocation: string | null
-  arTerms: string | null
-  equipmentMake: string | null
-  equipmentModel: string | null
-  serialNumber: string | null
-  locationOnSite: string | null
-  equipmentContactName: string | null
-  equipmentContactEmail: string | null
-  equipmentContactPhone: string | null
-  technicianName: string
-  completedDate: string
-  hoursWorked: number | null
-  machineHours: number | null
-  dateCode: string | null
-  completionNotes: string | null
-  partsUsed: PartLine[]
-  additionalPartsUsed: PartLine[]
-  additionalHoursWorked: number | null
-  laborRate: number
-  billingAmount: number | null
-  billingType: string | null
-  flatRate: number | null
-  poRequired: boolean
-  poNumber: string | null
-  billingContactName: string | null
-  billingContactEmail: string | null
-  billingContactPhone: string | null
-  customerSignature: string | null
-  customerSignatureName: string | null
-  photoUrls: string[]
-}
+// BillingTicket + PartLine imported from @/types/billing (single source of truth)
 
 // Raw Supabase join shape
 interface RawTicket {
