@@ -1,9 +1,17 @@
 // Lead-to-sales-rep email template. Pure function — no DB, no fetch, no side
 // effects. Caller (the approve-and-email route) loads the lead, signs photo
 // URLs, and passes everything in.
+//
+// `primary.kind` controls framing: a `rep` recipient gets the standard
+// "Forwarding this to you to follow up" intro; a sales/branch manager gets a
+// "Forwarding this for you to assign to one of your reps" intro and a
+// distinct subject prefix.
+
+import type { SalesRepKind } from '@/types/database'
 
 export type LeadToSalesRepTemplateInput = {
-  repName: string
+  primary: { name: string; kind: SalesRepKind }
+  ccNames: string[]
   techName: string
   customerName: string
   contact: {
@@ -29,7 +37,8 @@ export function renderLeadToSalesRepEmail(
   input: LeadToSalesRepTemplateInput
 ): EmailTemplate {
   const {
-    repName,
+    primary,
+    ccNames,
     techName,
     customerName,
     contact,
@@ -41,8 +50,21 @@ export function renderLeadToSalesRepEmail(
     companyName,
   } = input
 
-  const repFirstName = repName.split(' ')[0] || 'there'
-  const subject = `New equipment lead from ${techName} — ${customerName}`
+  const isManager = primary.kind !== 'rep'
+  const primaryFirstName = primary.name.split(' ')[0] || 'there'
+  const subject = isManager
+    ? `Lead to assign: equipment lead from ${techName} — ${customerName}`
+    : `New equipment lead from ${techName} — ${customerName}`
+
+  const introTextLine = isManager
+    ? `${techName} just submitted an equipment lead at ${customerName}. Forwarding it to you to assign to one of your reps.`
+    : `${techName} just submitted an equipment lead at ${customerName}. Forwarding it to you to follow up.`
+
+  const introHtml = isManager
+    ? `${escapeHtml(techName)} just submitted an equipment lead at <strong>${escapeHtml(customerName)}</strong>. Forwarding it to you to <strong>assign to one of your reps</strong>.`
+    : `${escapeHtml(techName)} just submitted an equipment lead at <strong>${escapeHtml(customerName)}</strong>. Forwarding it to you to follow up.`
+
+  const ccLine = ccNames.length > 0 ? `Also notified: ${ccNames.join(', ')}.` : null
 
   const contactLines = [
     contact.name ? `Name:  ${contact.name}` : null,
@@ -51,9 +73,9 @@ export function renderLeadToSalesRepEmail(
   ].filter((l): l is string => l !== null)
 
   const text = [
-    `Hi ${repFirstName},`,
+    `Hi ${primaryFirstName},`,
     '',
-    `${techName} just submitted an equipment lead at ${customerName}. Forwarding it to you to follow up.`,
+    introTextLine,
     optionalNote ? '' : null,
     optionalNote ? `Note: ${optionalNote}` : null,
     '',
@@ -69,6 +91,8 @@ export function renderLeadToSalesRepEmail(
     ...signedPhotoUrls.map((u, i) => `  ${i + 1}. ${u}`),
     '',
     `Full lead in CallBoard: ${leadDeepLink}`,
+    ccLine ? '' : null,
+    ccLine,
     '',
     `Thanks,`,
     `${companyName}`,
@@ -145,8 +169,8 @@ export function renderLeadToSalesRepEmail(
           </tr>
           <tr>
             <td style="padding:24px 32px 8px;color:#1f2937;font-size:15px;line-height:1.55;">
-              <p style="margin:0 0 12px;">Hi ${escapeHtml(repFirstName)},</p>
-              <p style="margin:0;">${escapeHtml(techName)} just submitted an equipment lead at <strong>${escapeHtml(customerName)}</strong>. Forwarding it to you to follow up.</p>
+              <p style="margin:0 0 12px;">Hi ${escapeHtml(primaryFirstName)},</p>
+              <p style="margin:0;">${introHtml}</p>
             </td>
           </tr>
           ${noteHtml}
@@ -191,6 +215,11 @@ export function renderLeadToSalesRepEmail(
               </p>
             </td>
           </tr>
+          ${ccLine ? `<tr>
+            <td style="padding:0 32px 16px;color:#71717a;font-size:13px;font-style:italic;">
+              ${escapeHtml(ccLine)}
+            </td>
+          </tr>` : ''}
           <tr>
             <td style="padding:20px 32px;border-top:1px solid #e4e4e7;color:#52525b;font-size:13px;">
               ${escapeHtml(companyName)}

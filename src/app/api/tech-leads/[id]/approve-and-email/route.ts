@@ -2,17 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentUser, RESET_ROLES } from '@/lib/auth'
-import { getSalesRepById } from '@/lib/db/sales-reps'
+import { getSalesRepsByIds } from '@/lib/db/sales-reps'
 import { getSetting } from '@/lib/db/settings'
 import { sendMandrillEmail } from '@/lib/mandrill'
 import { renderLeadToSalesRepEmail } from '@/lib/email-templates/lead-to-sales-rep'
 import type { TicketPhoto } from '@/types/database'
 
 const NOTE_MAX = 500
+const CC_MAX = 10
 const SIGNED_URL_TTL_SEC = 60 * 60 * 24 * 7 // 7 days
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 type ReqBody = {
   sales_rep_id?: string
+  cc_ids?: string[]
   note?: string
 }
 
@@ -37,8 +40,20 @@ export async function POST(
     const body = (await request.json()) as ReqBody
     const salesRepId = typeof body.sales_rep_id === 'string' ? body.sales_rep_id : ''
     const note = typeof body.note === 'string' ? body.note.trim().slice(0, NOTE_MAX) : ''
-    if (!salesRepId) {
-      return NextResponse.json({ error: 'sales_rep_id is required' }, { status: 400 })
+    const rawCcIds = Array.isArray(body.cc_ids) ? body.cc_ids : []
+
+    if (!salesRepId || !UUID_RE.test(salesRepId)) {
+      return NextResponse.json({ error: 'A valid sales_rep_id is required' }, { status: 400 })
+    }
+
+    // Dedupe, drop the primary if it appears, validate UUID format, cap length.
+    const ccIds = Array.from(
+      new Set(
+        rawCcIds.filter((v): v is string => typeof v === 'string' && UUID_RE.test(v) && v !== salesRepId)
+      )
+    )
+    if (ccIds.length > CC_MAX) {
+      return NextResponse.json({ error: `Up to ${CC_MAX} CC recipients allowed` }, { status: 400 })
     }
 
     const supabase = await createClient()
@@ -77,13 +92,23 @@ export async function POST(
       )
     }
 
-    const rep = await getSalesRepById(salesRepId)
-    if (!rep || !rep.active) {
+    const allReps = await getSalesRepsByIds([salesRepId, ...ccIds])
+    const repsById = new Map(allReps.map(r => [r.id, r]))
+    const primary = repsById.get(salesRepId)
+    if (!primary || !primary.active) {
       return NextResponse.json(
         { error: 'Selected sales rep is unavailable.' },
         { status: 404 }
       )
     }
+    const ccReps = ccIds.map(id => repsById.get(id))
+    if (ccReps.some(r => !r || !r.active)) {
+      return NextResponse.json(
+        { error: 'One or more CC recipients are unavailable.' },
+        { status: 400 }
+      )
+    }
+    const validCcReps = ccReps.filter((r): r is NonNullable<typeof r> => !!r)
 
     // Sign 7-day URLs for any attached machine photos. Service-role client
     // bypasses the storage RLS that would otherwise block manager reads.
@@ -115,7 +140,8 @@ export async function POST(
       : `/tech-payouts?lead=${id}`
 
     const { subject, html, text } = renderLeadToSalesRepEmail({
-      repName: rep.name,
+      primary: { name: primary.name, kind: primary.kind },
+      ccNames: validCcReps.map(r => r.name),
       techName,
       customerName,
       contact: {
@@ -135,12 +161,13 @@ export async function POST(
     let mandrillStatus: 'sent' | 'queued' | 'scheduled'
     try {
       const result = await sendMandrillEmail({
-        to: { email: rep.email, name: rep.name },
+        to: { email: primary.email, name: primary.name },
+        cc: validCcReps.map(r => ({ email: r.email, name: r.name })),
         subject,
         html,
         text,
         tags: ['tech-lead-rep-forward'],
-        metadata: { tech_lead_id: id, sales_rep_id: rep.id },
+        metadata: { tech_lead_id: id, sales_rep_id: primary.id },
       })
       messageId = result.messageId
       mandrillStatus = result.status
@@ -162,9 +189,10 @@ export async function POST(
         status: 'approved',
         approved_by: user.id,
         approved_at: now,
-        emailed_to_rep_id: rep.id,
+        emailed_to_rep_id: primary.id,
         emailed_to_rep_at: now,
         email_rep_message_id: messageId,
+        emailed_cc_ids: validCcReps.map(r => r.id),
       })
       .eq('id', id)
       .eq('status', 'pending')
@@ -192,7 +220,8 @@ export async function POST(
       ok: true,
       message_id: messageId,
       status: mandrillStatus,
-      rep: { id: rep.id, name: rep.name, email: rep.email },
+      rep: { id: primary.id, name: primary.name, email: primary.email },
+      cc: validCcReps.map(r => ({ id: r.id, name: r.name, email: r.email })),
     })
   } catch (err) {
     console.error('POST /api/tech-leads/[id]/approve-and-email error:', err)

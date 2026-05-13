@@ -12,6 +12,7 @@ export type MandrillRecipient = {
 
 export type SendMandrillEmailInput = {
   to: MandrillRecipient
+  cc?: MandrillRecipient[]
   subject: string
   html: string
   text: string
@@ -48,6 +49,11 @@ export async function sendMandrillEmail(
   if (!apiKey) throw new MandrillError('MANDRILL_API_KEY is not configured')
   if (!fromEmail) throw new MandrillError('MANDRILL_FROM_EMAIL is not configured')
 
+  const recipients = [
+    { email: input.to.email, name: input.to.name, type: 'to' as const },
+    ...(input.cc ?? []).map((r) => ({ email: r.email, name: r.name, type: 'cc' as const })),
+  ]
+
   const body = {
     key: apiKey,
     message: {
@@ -56,7 +62,8 @@ export async function sendMandrillEmail(
       subject: input.subject,
       from_email: fromEmail,
       from_name: fromName,
-      to: [{ email: input.to.email, name: input.to.name, type: 'to' as const }],
+      to: recipients,
+      preserve_recipients: true,
       track_opens: true,
       track_clicks: true,
       tags: input.tags ?? [],

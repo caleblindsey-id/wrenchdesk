@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import type { TechLeadWithJoins } from '@/lib/db/tech-leads'
-import type { TicketPhoto, SalesRep } from '@/types/database'
+import type { TicketPhoto, SalesRep, SalesRepKind } from '@/types/database'
 import { tierLabel, EQUIPMENT_SALE_TIERS } from '@/lib/tech-leads/bonus-tiers'
 import { createClient } from '@/lib/supabase/client'
 
@@ -15,6 +15,13 @@ interface Props {
 }
 
 const NOTE_MAX = 500
+const CC_MAX = 10
+
+const KIND_GROUP_LABEL: Record<SalesRepKind, string> = {
+  branch_manager: 'Branch Managers',
+  sales_manager: 'Sales Managers',
+  rep: 'Sales Reps',
+}
 
 export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone }: Props) {
   const [mode, setMode] = useState<'choose' | 'reject' | 'email_rep'>('choose')
@@ -23,6 +30,7 @@ export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone 
   const [error, setError] = useState<string | null>(null)
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [selectedRepId, setSelectedRepId] = useState('')
+  const [ccIds, setCcIds] = useState<Set<string>>(new Set())
   const [repNote, setRepNote] = useState('')
 
   useEffect(() => {
@@ -32,9 +40,27 @@ export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone 
       setError(null)
       setSubmitting(false)
       setSelectedRepId('')
+      setCcIds(new Set())
       setRepNote('')
     }
   }, [lead])
+
+  const repsByKind = useMemo(() => {
+    const groups: Record<SalesRepKind, SalesRep[]> = { branch_manager: [], sales_manager: [], rep: [] }
+    for (const r of salesReps) groups[r.kind].push(r)
+    return groups
+  }, [salesReps])
+
+  const selectedRep = useMemo(
+    () => salesReps.find(r => r.id === selectedRepId),
+    [salesReps, selectedRepId]
+  )
+  const isManagerPrimary = !!selectedRep && selectedRep.kind !== 'rep'
+
+  const ccCandidates = useMemo(
+    () => salesReps.filter(r => r.kind !== 'rep' && r.id !== selectedRepId),
+    [salesReps, selectedRepId]
+  )
 
   // Fetch signed URLs (1h) for any attached machine photos.
   useEffect(() => {
@@ -107,7 +133,7 @@ export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone 
   async function handleApproveAndEmail() {
     if (!lead) return
     if (!selectedRepId) {
-      setError('Pick a sales rep to forward this lead to.')
+      setError('Pick a recipient to forward this lead to.')
       return
     }
     setSubmitting(true)
@@ -118,6 +144,7 @@ export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sales_rep_id: selectedRepId,
+          cc_ids: Array.from(ccIds),
           note: repNote.trim().slice(0, NOTE_MAX),
         }),
       })
@@ -128,6 +155,15 @@ export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone 
       setError(e instanceof Error ? e.message : 'Failed to approve and email lead.')
       setSubmitting(false)
     }
+  }
+
+  function toggleCc(id: string) {
+    setCcIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else if (next.size < CC_MAX) next.add(id)
+      return next
+    })
   }
 
   const customerLabel = lead.customers?.name
@@ -327,15 +363,15 @@ export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone 
         {mode === 'email_rep' && (
           <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Approves the lead and emails the contact info, notes, and photos to the selected sales rep.
+              Approves the lead and emails the contact info, notes, and photos to the recipient. CC sales/branch managers as needed.
             </p>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                Sales rep
+                Send to
               </label>
               {salesReps.length === 0 ? (
                 <p className="text-sm text-red-600 dark:text-red-400">
-                  No active sales reps. Add one in Settings first.
+                  No active sales reps or managers. Add one in Settings first.
                 </p>
               ) : (
                 <select
@@ -344,24 +380,70 @@ export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone 
                   autoFocus
                   className="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
                 >
-                  <option value="">Select a rep…</option>
-                  {salesReps.map(rep => (
-                    <option key={rep.id} value={rep.id}>
-                      {rep.name} — {rep.email}
-                    </option>
-                  ))}
+                  <option value="">Select a recipient…</option>
+                  {(['branch_manager', 'sales_manager', 'rep'] as SalesRepKind[]).map(kind =>
+                    repsByKind[kind].length > 0 ? (
+                      <optgroup key={kind} label={KIND_GROUP_LABEL[kind]}>
+                        {repsByKind[kind].map(rep => (
+                          <option key={rep.id} value={rep.id}>
+                            {rep.name}
+                            {rep.title ? ` — ${rep.title}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null
+                  )}
                 </select>
               )}
+              {isManagerPrimary && selectedRep && (
+                <div className="mt-2 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+                  This will go to <strong>{selectedRep.name}</strong> as a request to assign the lead to one of their reps.
+                </div>
+              )}
             </div>
+            {ccCandidates.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  CC sales / branch managers (optional)
+                </label>
+                <div className="rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 max-h-40 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-600">
+                  {ccCandidates.map(rep => {
+                    const checked = ccIds.has(rep.id)
+                    const disabled = !checked && ccIds.size >= CC_MAX
+                    return (
+                      <label
+                        key={rep.id}
+                        className={`flex items-center gap-2 px-3 py-2 text-sm text-gray-900 dark:text-white cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600/40 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => toggleCc(rep.id)}
+                          className="rounded border-gray-300 dark:border-gray-500 text-slate-600 focus:ring-slate-500"
+                        />
+                        <span className="flex-1">
+                          {rep.name}
+                          <span className="text-gray-500 dark:text-gray-400"> — {rep.title ?? KIND_GROUP_LABEL[rep.kind].replace(/s$/, '')}</span>
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {ccIds.size}/{CC_MAX} selected
+                </p>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                Note to rep (optional)
+                Note to recipient (optional)
               </label>
               <textarea
                 value={repNote}
                 onChange={e => setRepNote(e.target.value.slice(0, NOTE_MAX))}
                 rows={3}
-                placeholder="Anything the rep should know before reaching out…"
+                placeholder="Anything the recipient should know before reaching out…"
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-right">
