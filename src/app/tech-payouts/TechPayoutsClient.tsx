@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import type { TechLeadStatus, TechLeadType } from '@/types/database'
+import type { TechLeadStatus, TechLeadType, SalesRep } from '@/types/database'
 import type { TechLeadWithJoins } from '@/lib/db/tech-leads'
 import type { AceLaborEntryWithJoins } from '@/lib/db/ace-labor'
 import type { CandidateWithLead } from '@/lib/db/equipment-sale-candidates'
@@ -20,6 +20,7 @@ interface Props {
   leads: TechLeadWithJoins[]
   candidatesByLead: Record<string, CandidateWithLead[]>
   aceEntries: AceLaborEntryWithJoins[]
+  salesReps: SalesRep[]
   currentUserId: string
 }
 
@@ -97,7 +98,7 @@ function aceTicketLink(e: AceLaborEntryWithJoins): { href: string; label: string
   return { href: '#', label: '—', customer: '—' }
 }
 
-export default function TechPayoutsClient({ leads, candidatesByLead, aceEntries, currentUserId }: Props) {
+export default function TechPayoutsClient({ leads, candidatesByLead, aceEntries, salesReps, currentUserId }: Props) {
   const router = useRouter()
 
   const pendingLeadsCount = useMemo(() => leads.filter(l => l.status === 'pending').length, [leads])
@@ -547,6 +548,7 @@ export default function TechPayoutsClient({ leads, candidatesByLead, aceEntries,
 
       <LeadReviewModal
         lead={reviewLead}
+        salesReps={salesReps}
         onClose={() => setReviewLead(null)}
         onDone={() => { setReviewLead(null); router.refresh() }}
       />

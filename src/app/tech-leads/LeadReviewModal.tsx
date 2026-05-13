@@ -3,22 +3,27 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { TechLeadWithJoins } from '@/lib/db/tech-leads'
-import type { TicketPhoto } from '@/types/database'
+import type { TicketPhoto, SalesRep } from '@/types/database'
 import { tierLabel, EQUIPMENT_SALE_TIERS } from '@/lib/tech-leads/bonus-tiers'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
   lead: TechLeadWithJoins | null
+  salesReps?: SalesRep[]
   onClose: () => void
   onDone: () => void
 }
 
-export default function LeadReviewModal({ lead, onClose, onDone }: Props) {
-  const [mode, setMode] = useState<'choose' | 'reject'>('choose')
+const NOTE_MAX = 500
+
+export default function LeadReviewModal({ lead, salesReps = [], onClose, onDone }: Props) {
+  const [mode, setMode] = useState<'choose' | 'reject' | 'email_rep'>('choose')
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
+  const [selectedRepId, setSelectedRepId] = useState('')
+  const [repNote, setRepNote] = useState('')
 
   useEffect(() => {
     if (lead) {
@@ -26,6 +31,8 @@ export default function LeadReviewModal({ lead, onClose, onDone }: Props) {
       setReason('')
       setError(null)
       setSubmitting(false)
+      setSelectedRepId('')
+      setRepNote('')
     }
   }, [lead])
 
@@ -95,6 +102,32 @@ export default function LeadReviewModal({ lead, onClose, onDone }: Props) {
       return
     }
     await post({ action: 'reject', reason: reason.trim() })
+  }
+
+  async function handleApproveAndEmail() {
+    if (!lead) return
+    if (!selectedRepId) {
+      setError('Pick a sales rep to forward this lead to.')
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/tech-leads/${lead.id}/approve-and-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sales_rep_id: selectedRepId,
+          note: repNote.trim().slice(0, NOTE_MAX),
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || 'Failed to approve and email lead.')
+      onDone()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to approve and email lead.')
+      setSubmitting(false)
+    }
   }
 
   const customerLabel = lead.customers?.name
@@ -228,8 +261,8 @@ export default function LeadReviewModal({ lead, onClose, onDone }: Props) {
           <p className="px-5 text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>
         )}
 
-        {mode === 'choose' ? (
-          <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+        {mode === 'choose' && (
+          <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap justify-end gap-2">
             <button
               type="button"
               onClick={() => setMode('reject')}
@@ -238,6 +271,16 @@ export default function LeadReviewModal({ lead, onClose, onDone }: Props) {
             >
               Reject
             </button>
+            {isEquipmentSale && (
+              <button
+                type="button"
+                onClick={() => { setError(null); setMode('email_rep') }}
+                disabled={submitting}
+                className="px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-50"
+              >
+                Approve & email rep
+              </button>
+            )}
             <button
               type="button"
               onClick={handleApprove}
@@ -247,7 +290,8 @@ export default function LeadReviewModal({ lead, onClose, onDone }: Props) {
               {submitting ? 'Approving…' : 'Approve'}
             </button>
           </div>
-        ) : (
+        )}
+        {mode === 'reject' && (
           <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400">
               Rejection reason (visible to the tech)
@@ -276,6 +320,70 @@ export default function LeadReviewModal({ lead, onClose, onDone }: Props) {
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
               >
                 {submitting ? 'Rejecting…' : 'Reject lead'}
+              </button>
+            </div>
+          </div>
+        )}
+        {mode === 'email_rep' && (
+          <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Approves the lead and emails the contact info, notes, and photos to the selected sales rep.
+            </p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                Sales rep
+              </label>
+              {salesReps.length === 0 ? (
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  No active sales reps. Add one in Settings first.
+                </p>
+              ) : (
+                <select
+                  value={selectedRepId}
+                  onChange={e => setSelectedRepId(e.target.value)}
+                  autoFocus
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+                >
+                  <option value="">Select a rep…</option>
+                  {salesReps.map(rep => (
+                    <option key={rep.id} value={rep.id}>
+                      {rep.name} — {rep.email}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                Note to rep (optional)
+              </label>
+              <textarea
+                value={repNote}
+                onChange={e => setRepNote(e.target.value.slice(0, NOTE_MAX))}
+                rows={3}
+                placeholder="Anything the rep should know before reaching out…"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-right">
+                {repNote.length}/{NOTE_MAX}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMode('choose')}
+                disabled={submitting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveAndEmail}
+                disabled={submitting || !selectedRepId || salesReps.length === 0}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-md disabled:opacity-50"
+              >
+                {submitting ? 'Sending…' : 'Send & approve'}
               </button>
             </div>
           </div>

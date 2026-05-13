@@ -2,15 +2,17 @@ import { requireRole, MANAGER_ROLES } from '@/lib/auth'
 import { getAllLeads } from '@/lib/db/tech-leads'
 import { getEntriesByStatus } from '@/lib/db/ace-labor'
 import { getPendingCandidatesForLeads } from '@/lib/db/equipment-sale-candidates'
+import { getActiveSalesReps } from '@/lib/db/sales-reps'
 import TechPayoutsClient from './TechPayoutsClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TechPayoutsPage() {
   const user = await requireRole(...MANAGER_ROLES)
-  const [leads, aceEntries] = await Promise.all([
+  const [leads, aceEntries, salesReps] = await Promise.all([
     getAllLeads(),
     getEntriesByStatus(['pending', 'approved', 'paid', 'rejected']),
+    getActiveSalesReps(),
   ])
 
   const matchableLeadIds = leads
@@ -30,6 +32,7 @@ export default async function TechPayoutsPage() {
         leads={leads}
         candidatesByLead={candidatesByLead}
         aceEntries={aceEntries}
+        salesReps={salesReps}
         currentUserId={user.id}
       />
     </div>

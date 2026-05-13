@@ -418,6 +418,12 @@ export type TechLeadRow = {
   // Machine photos uploaded at submission. Stored under
   // `leads/{tech_lead_id}/{uuid}.jpg` in the shared `ticket-photos` bucket.
   photos: TicketPhoto[]
+  // Rep-forward audit (migration 064). Set when the lead is approved via
+  // /api/tech-leads/[id]/approve-and-email. Idempotency guard against
+  // duplicate sends.
+  emailed_to_rep_id: string | null
+  emailed_to_rep_at: string | null
+  email_rep_message_id: string | null
   created_at: string
   updated_at: string
 }
