@@ -146,7 +146,7 @@ export default function PmPartsSection({
       await patchTicket({ parts_requested: updated })
       setParts(updated)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error saving PO number')
+      setError(err instanceof Error ? err.message : 'Error saving Synergy PO number')
     } finally {
       setSaving(false)
     }
@@ -325,7 +325,7 @@ export default function PmPartsSection({
                 {/* Vendor item code — office staff only, free text */}
                 {!part.cancelled && !isTech && (
                   <div className="flex items-center gap-2 ml-0 sm:ml-4">
-                    <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Vendor item #:</label>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Vendor Item #:</label>
                     <input
                       type="text"
                       defaultValue={part.vendor_item_code ?? ''}
@@ -339,11 +339,11 @@ export default function PmPartsSection({
                 {/* PO # input — office staff only, after ordered */}
                 {!part.cancelled && !isTech && (part.status === 'ordered' || part.status === 'received') && (
                   <div className="flex items-center gap-2 ml-0 sm:ml-4">
-                    <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">PO #:</label>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Synergy PO #:</label>
                     <input
                       type="text"
                       defaultValue={part.po_number ?? ''}
-                      placeholder="Enter PO number"
+                      placeholder="Enter Synergy PO number"
                       onBlur={e => handleSavePartPo(i, e.target.value)}
                       className="rounded-md border border-gray-300 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:placeholder-gray-500 px-2 py-1 text-xs w-40 focus:outline-none focus:ring-2 focus:ring-slate-500"
                     />
