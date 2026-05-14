@@ -178,6 +178,13 @@ export interface PartRequest {
 
 export type PartsQueueSource = 'pm' | 'service'
 
+// 'pending' is the migration-028 DEFAULT on service_tickets — newly-created
+// rows hold it until the nightly script stamps valid/invalid. The validator
+// only writes valid/invalid/null, so this is a read-only state from the UI's
+// perspective.
+export type SynergyValidationStatus = 'valid' | 'invalid' | 'pending' | null
+export type PartsValidationStatus = 'valid' | 'partial' | 'invalid' | null
+
 export type PartsQueueRow = {
   source: PartsQueueSource
   ticket_id: string
@@ -188,6 +195,9 @@ export type PartsQueueRow = {
   assigned_technician_id: string | null
   assigned_technician_name: string | null
   synergy_order_number: string | null
+  synergy_validation_status: SynergyValidationStatus
+  parts_validation_status: PartsValidationStatus
+  synergy_validated_at: string | null
   requested_at: string
   description: string | null
   quantity: number | null

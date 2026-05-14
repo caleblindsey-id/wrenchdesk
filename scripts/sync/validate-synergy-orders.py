@@ -16,13 +16,14 @@ Validates two things for open service and PM tickets:
 Runs nightly at 5:30 AM via Windows Task Scheduler (after the 5 AM sync).
 """
 
+import argparse
+import json
 import os
 import sys
 import logging
 import pyodbc
 import requests
 from datetime import datetime, timezone
-from pathlib import Path
 
 # ============================================================
 # Configuration
@@ -36,25 +37,15 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 # ============================================================
 
 def setup_logging() -> logging.Logger:
-    script_dir = Path(__file__).parent
-    project_root = script_dir.parent.parent
-    logs_dir = project_root / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
-    log_filename = logs_dir / f"validation-{datetime.now().strftime('%Y-%m-%d')}.log"
-    log_format = "%(asctime)s [%(levelname)s] %(message)s"
-
+    # Stdout only — the PowerShell wrapper tees stdout/stderr into the daily
+    # log file. A second writer here would race the wrapper's file handle and
+    # silently drop tracebacks (this happened from 2026-04-25 through 2026-05-13).
     logger = logging.getLogger("synergy_validation")
     logger.setLevel(logging.DEBUG)
 
-    fh = logging.FileHandler(log_filename, encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter(log_format))
-    logger.addHandler(fh)
-
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
-    ch.setFormatter(logging.Formatter(log_format))
+    ch.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
     logger.addHandler(ch)
 
     return logger
@@ -109,6 +100,77 @@ def fetch_candidates(table: str, excluded_statuses: tuple[str, ...]) -> list[dic
     })
 
 
+def fetch_single_ticket(table: str, ticket_id: str) -> dict | None:
+    """Fetch one ticket by id for the on-demand re-validate path."""
+    rows = supabase_get(table, {
+        "select": "id,synergy_order_number,parts_requested,status",
+        "id": f"eq.{ticket_id}",
+    })
+    return rows[0] if rows else None
+
+
+def validate_single(table: str, ticket: dict) -> dict:
+    """
+    Validate a single ticket against Synergy and write the result back.
+    Mirrors the per-ticket logic of the batch path. Returns a small result dict
+    so the API route can echo it to the caller without re-fetching.
+    """
+    raw = str(ticket.get("synergy_order_number") or "").strip()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if not raw:
+        patch = {
+            "synergy_validation_status": None,
+            "synergy_validated_at": now_iso,
+            "parts_validation_status": None,
+        }
+        supabase_patch_by_id(table, ticket["id"], patch)
+        return {"ok": True, **patch}
+
+    try:
+        ord_num = int(raw)
+    except ValueError:
+        patch = {
+            "synergy_validation_status": "invalid",
+            "synergy_validated_at": now_iso,
+            "parts_validation_status": None,
+        }
+        supabase_patch_by_id(table, ticket["id"], patch)
+        return {"ok": True, **patch, "reason": "non_numeric_order_number"}
+
+    try:
+        conn = pyodbc.connect("DSN=ERPlinked", autocommit=True, timeout=30)
+        cursor = conn.cursor()
+    except Exception as e:
+        return {"ok": False, "error": f"synergy_connect_failed: {e}"}
+
+    try:
+        cursor.execute("SELECT OrdNum FROM roh WHERE OrdNum = ?", ord_num)
+        order_ok = cursor.fetchone() is not None
+
+        order_prodcodes: set[str] = set()
+        if order_ok:
+            cursor.execute("SELECT ProdCode FROM rolnew WHERE OrdNum = ?", ord_num)
+            for (prod_code,) in cursor.fetchall():
+                if prod_code is not None:
+                    order_prodcodes.add(str(prod_code).strip())
+    finally:
+        conn.close()
+
+    patch: dict = {
+        "synergy_validation_status": "valid" if order_ok else "invalid",
+        "synergy_validated_at": now_iso,
+    }
+    if not order_ok:
+        patch["parts_validation_status"] = None
+    else:
+        patch["parts_validation_status"] = classify_parts(
+            ticket.get("parts_requested") or [], order_prodcodes
+        )
+    supabase_patch_by_id(table, ticket["id"], patch)
+    return {"ok": True, **patch}
+
+
 def classify_parts(parts: list[dict], prodcodes_for_order: set[str]) -> str | None:
     """
     Return 'valid' / 'partial' / 'invalid' / None for the part set.
@@ -130,13 +192,56 @@ def classify_parts(parts: list[dict], prodcodes_for_order: set[str]) -> str | No
     return "partial"
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate Synergy order numbers and part numbers.")
+    parser.add_argument(
+        "--ticket-id",
+        help="If set, validate only this one ticket and exit. Requires --source.",
+    )
+    parser.add_argument(
+        "--source",
+        choices=("pm", "service"),
+        help="With --ticket-id, which table the ticket lives in.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="On single-ticket mode, write the result JSON to stdout (suppresses other stdout).",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
+    if args.ticket_id and not args.source:
+        log.error("--ticket-id requires --source.")
+        sys.exit(2)
+
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         log.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.")
         sys.exit(1)
 
+    # Single-ticket re-validate path (called by the /api/parts-queue/[id]/revalidate
+    # endpoint). Same validation logic, no batching across the whole table.
+    if args.ticket_id:
+        # In --json mode, silence the human logger so stdout is pure JSON.
+        if args.json:
+            log.setLevel(logging.CRITICAL)
+        table = "pm_tickets" if args.source == "pm" else "service_tickets"
+        ticket = fetch_single_ticket(table, args.ticket_id)
+        if not ticket:
+            result = {"ok": False, "error": "ticket_not_found"}
+            print(json.dumps(result) if args.json else result)
+            sys.exit(1)
+        result = validate_single(table, ticket)
+        if args.json:
+            print(json.dumps(result))
+        else:
+            log.info(f"Result: {result}")
+        return
+
     log.info("=" * 60)
-    log.info("Synergy Order + Parts Validation — starting")
+    log.info("Synergy Order + Parts Validation - starting")
     log.info("=" * 60)
 
     # 1. Fetch candidates from both ticket tables
@@ -170,7 +275,7 @@ def main() -> None:
     # Mark non-numeric order #s invalid straight away
     now_iso = datetime.now(timezone.utc).isoformat()
     for table, tid, raw in non_numeric:
-        log.warning(f"  {table} {tid}: non-numeric order # '{raw}' — marking invalid")
+        log.warning(f"  {table} {tid}: non-numeric order # '{raw}' - marking invalid")
         supabase_patch_by_id(table, tid, {
             "synergy_validation_status": "invalid",
             "synergy_validated_at": now_iso,
@@ -240,7 +345,7 @@ def main() -> None:
                 # Order-level failure overrides parts validation
                 patch["parts_validation_status"] = None
                 invalid_count += 1
-                log.warning(f"  INVALID: {table} {tid} — order #{ord_num} not found in Synergy")
+                log.warning(f"  INVALID: {table} {tid} - order #{ord_num} not found in Synergy")
             else:
                 valid_count += 1
                 parts_status = classify_parts(ticket.get("parts_requested") or [], order_prodcodes)
@@ -250,11 +355,11 @@ def main() -> None:
                 elif parts_status == "partial":
                     parts_partial += 1
                     log.warning(
-                        f"  PARTS PARTIAL: {table} {tid} — order #{ord_num} has some item #s not on the order")
+                        f"  PARTS PARTIAL: {table} {tid} - order #{ord_num} has some item #s not on the order")
                 elif parts_status == "invalid":
                     parts_invalid += 1
                     log.warning(
-                        f"  PARTS INVALID: {table} {tid} — none of the requested item #s appear on order #{ord_num}")
+                        f"  PARTS INVALID: {table} {tid} - none of the requested item #s appear on order #{ord_num}")
 
             supabase_patch_by_id(table, tid, patch)
 

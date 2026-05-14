@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, XCircle } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, RefreshCw, XCircle } from 'lucide-react'
 import type { PartRequest, PartsQueueRow, PartsQueueSource } from '@/types/database'
 import {
   cancelPart,
   markPartOrdered,
   markPartReceived,
+  revalidateTicket,
   ticketDeepLink,
   updatePartFields,
 } from '@/lib/parts-queue'
@@ -37,6 +38,29 @@ const RECEIVED_WINDOW_MS = RECEIVED_WINDOW_DAYS * 24 * 60 * 60 * 1000
 
 function rowKey(r: Pick<PartsQueueRow, 'source' | 'ticket_id' | 'part_index'>): string {
   return `${r.source}:${r.ticket_id}:${r.part_index}`
+}
+
+// Collapses the two underlying validation columns into a single state for the
+// badge: 'invalid' (order # not in Synergy) trumps anything part-level, then
+// 'partial' (some parts not on the order) is amber, then a missing
+// synergy_validation_status means "validation hasn't run yet for this ticket"
+// (same-day order, typo correction). A row with no order # at all has nothing
+// to validate and gets no badge.
+export type ValidationState = 'valid' | 'invalid' | 'partial' | 'pending' | 'none'
+
+function deriveValidationState(row: PartsQueueRow): ValidationState {
+  if (!row.synergy_order_number) return 'none'
+  if (row.synergy_validation_status === 'invalid') return 'invalid'
+  if (row.parts_validation_status === 'invalid') return 'invalid'
+  if (row.parts_validation_status === 'partial') return 'partial'
+  // Treat NULL and the literal 'pending' (migration-028 DEFAULT on
+  // service_tickets) as the same "not yet validated" bucket.
+  if (
+    row.synergy_validation_status === null ||
+    row.synergy_validation_status === 'pending'
+  )
+    return 'pending'
+  return 'valid'
 }
 
 function partToRow(row: PartsQueueRow, part: PartRequest): PartsQueueRow {
@@ -239,6 +263,34 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
     }
   }, [applyUpdate])
 
+  const handleRevalidate = useCallback(async (row: PartsQueueRow) => {
+    const key = rowKey(row)
+    setPendingRow(key)
+    setError(null)
+    try {
+      const result = await revalidateTicket(row.source, row.ticket_id)
+      // Stamp the new validation status onto every row that shares this ticket
+      // (each ticket can have multiple parts, all sharing one parent status).
+      setRows((rs) =>
+        rs.map((r) =>
+          r.ticket_id === row.ticket_id && r.source === row.source
+            ? {
+                ...r,
+                synergy_validation_status: result.synergy_validation_status,
+                parts_validation_status: result.parts_validation_status,
+                synergy_validated_at: result.synergy_validated_at,
+              }
+            : r,
+        ),
+      )
+      flash(key)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to re-validate')
+    } finally {
+      setPendingRow((cur) => (cur === key ? null : cur))
+    }
+  }, [flash])
+
   const handleConfirmCancel = useCallback(async (reason: string) => {
     if (!cancelTarget) return
     const row = cancelTarget
@@ -315,6 +367,7 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
             <tr>
               <SortHeader label="Requested" colKey="requested_at" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Source" colKey="source" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <th scope="col" className="px-3 py-2 text-left font-semibold">Status</th>
               <SortHeader label="WO #" colKey="work_order_number" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Customer" colKey="customer_name" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Part" colKey="description" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
@@ -337,7 +390,7 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
             {filteredRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11 + (tab === 'ordered' || tab === 'received' ? 1 : 0)}
+                  colSpan={12 + (tab === 'ordered' || tab === 'received' ? 1 : 0)}
                   className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
                 >
                   {tab === 'to_order' && "No parts waiting to be ordered — you're caught up."}
@@ -364,6 +417,14 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
                     </td>
                     <td className="px-3 py-2">
                       <SourceBadge source={row.source} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <ValidationBadge
+                        state={deriveValidationState(row)}
+                        synergyOrderNumber={row.synergy_order_number}
+                        onRevalidate={() => handleRevalidate(row)}
+                        disabled={isPending}
+                      />
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900 dark:text-white">
                       {row.work_order_number ?? '—'}
@@ -564,6 +625,72 @@ function SourceBadge({ source }: { source: PartsQueueSource }) {
     >
       {isPm ? 'PM' : 'Service'}
     </span>
+  )
+}
+
+function ValidationBadge({
+  state,
+  synergyOrderNumber,
+  onRevalidate,
+  disabled,
+}: {
+  state: ValidationState
+  synergyOrderNumber: string | null
+  onRevalidate: () => void
+  disabled: boolean
+}) {
+  if (state === 'none' || state === 'valid') return null
+
+  const config: Record<
+    Exclude<ValidationState, 'none' | 'valid'>,
+    { label: string; tooltip: string; classes: string; canRevalidate: boolean }
+  > = {
+    invalid: {
+      label: 'Needs Review',
+      tooltip: synergyOrderNumber
+        ? `Synergy Order #${synergyOrderNumber} not found, or its part #s don't match.`
+        : 'Validation failed.',
+      classes: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+      canRevalidate: true,
+    },
+    partial: {
+      label: 'Partial',
+      tooltip: synergyOrderNumber
+        ? `Synergy Order #${synergyOrderNumber} found, but some part #s don't appear on it.`
+        : 'Some parts found, some not.',
+      classes: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+      canRevalidate: true,
+    },
+    pending: {
+      label: 'Pending',
+      tooltip:
+        'Validation hasn\'t run for this order yet. It runs nightly at 5:30 AM, or click re-check.',
+      classes: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+      canRevalidate: true,
+    },
+  }
+  const { label, tooltip, classes, canRevalidate } = config[state]
+
+  return (
+    <div className="inline-flex items-center gap-1" title={tooltip}>
+      <span
+        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${classes}`}
+      >
+        {label}
+      </span>
+      {canRevalidate && (
+        <button
+          type="button"
+          onClick={onRevalidate}
+          disabled={disabled}
+          title="Re-check against Synergy"
+          aria-label="Re-check against Synergy"
+          className="p-0.5 text-gray-400 hover:text-slate-700 dark:text-gray-500 dark:hover:text-gray-200 rounded disabled:opacity-40 transition-colors"
+        >
+          <RefreshCw className={`h-3 w-3 ${disabled ? 'animate-spin' : ''}`} />
+        </button>
+      )}
+    </div>
   )
 }
 
