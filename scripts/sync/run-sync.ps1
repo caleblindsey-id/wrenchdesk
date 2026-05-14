@@ -1,4 +1,4 @@
-# PM Scheduler — Nightly Sync Runner
+# PM Scheduler - Nightly Sync Runner
 # Run this script via Windows Task Scheduler at 5:00 AM daily
 #
 # Setup: edit the SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY values below,
@@ -17,12 +17,27 @@ if (-not (Test-Path $logsDir)) {
 }
 
 # ----------------------------------------------------------------
-# Environment variables
-# Edit these values, or set them as Windows System Environment
-# Variables and remove these two lines.
+# Environment variables - read from repo .env.local so key rotations
+# only need to touch one file. Supabase disabled legacy JWT keys on
+# 2026-05-13; .env.local holds the new sb_secret_ key.
 # ----------------------------------------------------------------
-$env:SUPABASE_URL              = "https://haohkybnmnpuxpiykjvb.supabase.co"
-$env:SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhhb2hreWJubW5wdXhwaXlranZiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mzg2MjA1NywiZXhwIjoyMDg5NDM4MDU3fQ.uw_t_dKzlQPctD3yS2M6qgHSr9FjHHzMvRzMb61OXOM"
+$envFile = Join-Path $projectRoot ".env.local"
+if (-not (Test-Path $envFile)) {
+    Write-Error "Missing .env.local at $envFile - cannot load Supabase credentials."
+    exit 1
+}
+Get-Content $envFile | ForEach-Object {
+    if ($_ -match '^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.+?)\s*$') {
+        Set-Item -Path "env:$($Matches[1])" -Value $Matches[2]
+    }
+}
+if (-not $env:SUPABASE_URL -and $env:NEXT_PUBLIC_SUPABASE_URL) {
+    $env:SUPABASE_URL = $env:NEXT_PUBLIC_SUPABASE_URL
+}
+if (-not $env:SUPABASE_SERVICE_ROLE_KEY) {
+    Write-Error "SUPABASE_SERVICE_ROLE_KEY not found in .env.local."
+    exit 1
+}
 
 # ----------------------------------------------------------------
 # Run the sync script

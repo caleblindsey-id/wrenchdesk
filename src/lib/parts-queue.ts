@@ -1,4 +1,15 @@
-import type { PartRequest, PartsQueueSource } from '@/types/database'
+import type {
+  PartRequest,
+  PartsQueueSource,
+  PartsValidationStatus,
+  SynergyValidationStatus,
+} from '@/types/database'
+
+export type RevalidateResult = {
+  synergy_validation_status: SynergyValidationStatus
+  parts_validation_status: PartsValidationStatus
+  synergy_validated_at: string | null
+}
 
 type UpdateArgs = {
   source: PartsQueueSource
@@ -69,4 +80,20 @@ export function reopenPart(
 
 export function ticketDeepLink(source: PartsQueueSource, ticket_id: string): string {
   return source === 'pm' ? `/tickets/${ticket_id}` : `/service/${ticket_id}`
+}
+
+export async function revalidateTicket(
+  source: PartsQueueSource,
+  ticket_id: string,
+): Promise<RevalidateResult> {
+  const res = await fetch(`/api/parts-queue/${ticket_id}/revalidate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source }),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to re-validate')
+  }
+  return data as RevalidateResult
 }
