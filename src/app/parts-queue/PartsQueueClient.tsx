@@ -320,9 +320,9 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
               <SortHeader label="Part" colKey="description" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Qty" colKey="quantity" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Vendor" colKey="vendor" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <SortHeader label="Synergy #" colKey="product_number" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <SortHeader label="Vendor #" colKey="vendor_item_code" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
-              <SortHeader label="PO #" colKey="po_number" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <SortHeader label="Synergy Item #" colKey="product_number" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <SortHeader label="Vendor Item #" colKey="vendor_item_code" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <SortHeader label="Synergy PO #" colKey="po_number" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Requested by" colKey="assigned_technician_name" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               {tab === 'ordered' && (
                 <SortHeader label="Ordered" colKey="ordered_at" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
@@ -388,7 +388,7 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
                     <td className="px-3 py-2">
                       <InlineText
                         value={row.product_number ?? ''}
-                        placeholder="Synergy #"
+                        placeholder="Synergy Item #"
                         disabled={!canEditFields || isPending}
                         onBlurCommit={v => handleFieldBlur(row, 'product_number', v)}
                         widthClass="w-28"
@@ -397,7 +397,7 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
                     <td className="px-3 py-2">
                       <InlineText
                         value={row.vendor_item_code ?? ''}
-                        placeholder="Vendor #"
+                        placeholder="Vendor Item #"
                         disabled={!canEditFields || isPending}
                         onBlurCommit={v => handleFieldBlur(row, 'vendor_item_code', v)}
                         widthClass="w-28"
@@ -406,7 +406,7 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
                     <td className="px-3 py-2">
                       <InlineText
                         value={row.po_number ?? ''}
-                        placeholder="PO #"
+                        placeholder="Synergy PO #"
                         disabled={!canEditFields || isPending}
                         onBlurCommit={v => handleFieldBlur(row, 'po_number', v)}
                         widthClass="w-24"
@@ -434,9 +434,9 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
                             onClick={() => handleMarkOrdered(row)}
                             title={
                               !row.product_number?.trim()
-                                ? 'Enter Synergy # first'
+                                ? 'Enter Synergy Item # first'
                                 : !row.po_number?.trim()
-                                ? 'Enter PO # first'
+                                ? 'Enter Synergy PO # first'
                                 : 'Mark ordered'
                             }
                             className="px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
@@ -449,7 +449,7 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
                             type="button"
                             disabled={isPending || !row.product_number?.trim()}
                             onClick={() => handleMarkReceived(row)}
-                            title={!row.product_number?.trim() ? 'Enter Synergy # first' : 'Mark received'}
+                            title={!row.product_number?.trim() ? 'Enter Synergy Item # first' : 'Mark received'}
                             className="px-2 py-1 text-xs font-medium text-green-600 dark:text-green-400 border border-green-300 dark:border-green-600 rounded hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
                             Mark Received
