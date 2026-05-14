@@ -359,7 +359,7 @@ export default function PartsEntryList({ parts, setParts, showPricing, showWarra
                 )}
                 {showVendorItemCode && (
                   <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Vendor #</label>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Vendor Item #</label>
                     <input
                       type="text"
                       value={part.vendorItemCode ?? ''}

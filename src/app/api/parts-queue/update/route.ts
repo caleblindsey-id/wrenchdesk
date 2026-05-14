@@ -146,13 +146,13 @@ export async function POST(request: NextRequest) {
         }
         if (!next.product_number?.trim()) {
           return NextResponse.json(
-            { error: 'Synergy item # is required to mark a part ordered.' },
+            { error: 'Synergy Item # is required to mark a part ordered.' },
             { status: 400 }
           )
         }
         if (!next.po_number?.trim()) {
           return NextResponse.json(
-            { error: 'PO # is required to mark a part ordered.' },
+            { error: 'Synergy PO # is required to mark a part ordered.' },
             { status: 400 }
           )
         }
