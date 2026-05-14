@@ -9,10 +9,15 @@ type UpdateBody = {
   source: Source
   ticket_id: string
   part_index: number
-  action?: 'patch' | 'mark_ordered' | 'mark_received' | 'cancel' | 'reopen'
+  action?: 'patch' | 'mark_ordered' | 'mark_received' | 'cancel' | 'reopen' | 'set_synergy_order'
   fields?: Partial<PartRequest>
   reason?: string
+  // Used only by 'set_synergy_order' — written to the parent ticket column,
+  // not the parts_requested JSONB.
+  synergy_order_number?: string | null
 }
+
+const SYNERGY_ORDER_MAX_LEN = 100
 
 function tableFor(source: Source): 'pm_tickets' | 'service_tickets' {
   return source === 'pm' ? 'pm_tickets' : 'service_tickets'
@@ -72,8 +77,12 @@ export async function POST(request: NextRequest) {
     }
     // part_index must be a real non-negative integer. typeof catches strings;
     // Number.isInteger catches floats / NaN / Infinity that typeof allows through.
-    if (!ticket_id || !Number.isInteger(part_index) || part_index < 0) {
-      return NextResponse.json({ error: 'Invalid ticket_id or part_index' }, { status: 400 })
+    // Skip the part_index check for set_synergy_order — it's a ticket-level write.
+    if (!ticket_id) {
+      return NextResponse.json({ error: 'Invalid ticket_id' }, { status: 400 })
+    }
+    if (action !== 'set_synergy_order' && (!Number.isInteger(part_index) || part_index < 0)) {
+      return NextResponse.json({ error: 'Invalid part_index' }, { status: 400 })
     }
 
     if (action === 'cancel') {
@@ -126,6 +135,39 @@ export async function POST(request: NextRequest) {
         { error: `Cannot modify parts on a ${ticket.status} ticket. Reopen it first.` },
         { status: 409 }
       )
+    }
+
+    // Ticket-level write: parent ticket's synergy_order_number. Done before
+    // the parts_requested array is touched — it has no per-part state.
+    if (action === 'set_synergy_order') {
+      const raw = typeof body.synergy_order_number === 'string'
+        ? body.synergy_order_number.trim().slice(0, SYNERGY_ORDER_MAX_LEN)
+        : null
+      const value = raw === '' ? null : raw
+
+      const { data: writeRows, error: writeErr } = await supabase
+        .from(table)
+        .update({ synergy_order_number: value })
+        .eq('id', ticket_id)
+        .eq('updated_at', ticket.updated_at)
+        .select('id, synergy_order_number')
+
+      if (writeErr) {
+        console.error('parts-queue set_synergy_order write error:', writeErr)
+        return NextResponse.json({ error: 'Failed to update Synergy order #' }, { status: 500 })
+      }
+      if (!writeRows || writeRows.length === 0) {
+        return NextResponse.json(
+          { error: 'This ticket was changed by someone else. Refresh and try again.' },
+          { status: 409 }
+        )
+      }
+      return NextResponse.json({
+        success: true,
+        ticket_id,
+        source,
+        synergy_order_number: writeRows[0].synergy_order_number,
+      })
     }
 
     const parts = (ticket.parts_requested ?? []) as PartRequest[]

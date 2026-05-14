@@ -10,6 +10,7 @@ import {
   markPartOrdered,
   markPartReceived,
   revalidateTicket,
+  setSynergyOrderNumber,
   ticketDeepLink,
   updatePartFields,
 } from '@/lib/parts-queue'
@@ -23,6 +24,7 @@ type SortKey =
   | 'source'
   | 'work_order_number'
   | 'customer_name'
+  | 'synergy_order_number'
   | 'description'
   | 'quantity'
   | 'vendor'
@@ -263,6 +265,33 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
     }
   }, [applyUpdate])
 
+  const handleSynergyOrderCommit = useCallback(async (row: PartsQueueRow, value: string) => {
+    const trimmed = value.trim()
+    const current = row.synergy_order_number ?? ''
+    if (trimmed === current) return
+    const key = rowKey(row)
+    setPendingRow(key)
+    setError(null)
+    try {
+      const next = await setSynergyOrderNumber(row.source, row.ticket_id, trimmed || null)
+      // SO# lives on the parent ticket — every part row sharing this
+      // (source, ticket_id) must reflect the new value.
+      setRows(rs =>
+        rs.map(r =>
+          r.ticket_id === row.ticket_id && r.source === row.source
+            ? { ...r, synergy_order_number: next }
+            : r,
+        ),
+      )
+      flash(key)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save Synergy order #')
+      router.refresh()
+    } finally {
+      setPendingRow(cur => (cur === key ? null : cur))
+    }
+  }, [flash, router])
+
   const handleRevalidate = useCallback(async (row: PartsQueueRow) => {
     const key = rowKey(row)
     setPendingRow(key)
@@ -370,6 +399,7 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
               <th scope="col" className="px-3 py-2 text-left font-semibold">Status</th>
               <SortHeader label="WO #" colKey="work_order_number" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Customer" colKey="customer_name" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
+              <SortHeader label="Synergy Order #" colKey="synergy_order_number" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Part" colKey="description" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Qty" colKey="quantity" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
               <SortHeader label="Vendor" colKey="vendor" sortKey={sortKey} sortDir={sortDir} onClick={toggleSort} />
@@ -390,7 +420,7 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
             {filteredRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={12 + (tab === 'ordered' || tab === 'received' ? 1 : 0)}
+                  colSpan={13 + (tab === 'ordered' || tab === 'received' ? 1 : 0)}
                   className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
                 >
                   {tab === 'to_order' && "No parts waiting to be ordered — you're caught up."}
@@ -431,6 +461,15 @@ export default function PartsQueueClient({ rows: initialRows }: Props) {
                     </td>
                     <td className="px-3 py-2 text-gray-900 dark:text-white max-w-[200px] truncate" title={row.customer_name ?? ''}>
                       {row.customer_name ?? '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      <InlineText
+                        value={row.synergy_order_number ?? ''}
+                        placeholder="SO #"
+                        disabled={!canEditFields || isPending}
+                        onBlurCommit={v => handleSynergyOrderCommit(row, v)}
+                        widthClass="w-24"
+                      />
                     </td>
                     <td className="px-3 py-2 text-gray-900 dark:text-white max-w-[240px] truncate" title={row.description ?? ''}>
                       {row.description ?? '—'}
