@@ -93,7 +93,7 @@ export async function POST(
     }
   }
 
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient('SERVER_ONLY')
 
   const { data: ticket, error: fetchError } = await supabase
     .from('service_tickets')

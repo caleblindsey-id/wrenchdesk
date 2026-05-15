@@ -15,7 +15,7 @@ export default async function ApprovalPage({
   params: Promise<{ token: string }>
 }) {
   const { token } = await params
-  const supabase = createAdminClient()
+  const supabase = await createAdminClient('SERVER_ONLY')
 
   const { data: ticket } = await supabase
     .from('service_tickets')

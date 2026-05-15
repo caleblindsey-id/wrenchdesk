@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       maxAge: 300,
     })
 
-    const admin = createAdminClient()
+    const admin = await createAdminClient('SERVER_ONLY')
     const { error: dbError } = await admin
       .from('users')
       .update({ must_change_password: false })

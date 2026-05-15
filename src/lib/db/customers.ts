@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 import { CustomerRow, ContactRow, ShipToLocationRow } from '@/types/database'
 
 // List columns the customers list page actually renders. The detail page uses
@@ -16,9 +17,12 @@ export async function getCustomers(search?: string): Promise<CustomerRow[]> {
     .limit(50)
 
   if (search) {
-    // Strip PostgREST filter-syntax chars before injecting into .or().
-    const safe = search.replace(/[,()]/g, ' ')
-    query = query.or(`name.ilike.%${safe}%,account_number.ilike.%${safe}%`)
+    // Sanitize before splicing into .or() — see lib/db/safe-or.
+    const safe = sanitizeOrValue(search)
+    query = query.or(safeOrRaw([
+      { column: 'name', op: 'ilike', raw: `%${safe}%` },
+      { column: 'account_number', op: 'ilike', raw: `%${safe}%` },
+    ]))
   }
 
   const { data, error } = await query

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 import { BillingType, DefaultProduct } from '@/types/database'
 import { formatPhoneNumber } from '@/lib/phone'
 import { normalizeSerial, serialsMatch } from '@/lib/equipment'
@@ -138,12 +139,15 @@ export default function AddEquipmentModal({
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       const supabase = createClient()
-      // Strip PostgREST filter-syntax chars before injecting into .or().
-      const q = customerSearch.trim().replace(/[,()]/g, ' ')
+      // Sanitize before splicing into .or() — see lib/db/safe-or.
+      const q = sanitizeOrValue(customerSearch.trim())
       const { data } = await supabase
         .from('customers')
         .select('id, name, account_number')
-        .or(`name.ilike.%${q}%,account_number.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'name', op: 'ilike', raw: `%${q}%` },
+          { column: 'account_number', op: 'ilike', raw: `%${q}%` },
+        ]))
         .order('name')
         .limit(25)
       setCustomerResults((data as CustomerOption[]) ?? [])

@@ -6,6 +6,7 @@ import { ChevronRight } from 'lucide-react'
 import { CustomerRow } from '@/types/database'
 import CreditHoldBadge from '@/components/CreditHoldBadge'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 
 interface CustomerListProps {
   customers: CustomerRow[]
@@ -30,12 +31,15 @@ export default function CustomerList({ customers }: CustomerListProps) {
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       const supabase = createClient()
-      // Strip PostgREST filter-syntax chars before injecting into .or().
-      const q = search.trim().replace(/[,()]/g, ' ')
+      // Sanitize before splicing into .or() — see lib/db/safe-or.
+      const q = sanitizeOrValue(search.trim())
       const { data } = await supabase
         .from('customers')
         .select('id, name, account_number, ar_terms, credit_hold, active, billing_city, billing_state, po_required, show_pricing_on_pm_pdf')
-        .or(`name.ilike.%${q}%,account_number.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'name', op: 'ilike', raw: `%${q}%` },
+          { column: 'account_number', op: 'ilike', raw: `%${q}%` },
+        ]))
         .order('name')
         .limit(50)
       setDisplayedCustomers((data ?? []) as unknown as typeof customers)

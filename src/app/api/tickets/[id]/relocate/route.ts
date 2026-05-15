@@ -79,7 +79,7 @@ export async function POST(
     // row, all in one transaction. Invoked under service_role so the
     // equipment_tech_field_lock trigger from migration 048 sees auth.uid()=NULL
     // and lets the equipment write through.
-    const admin = createAdminClient()
+    const admin = await createAdminClient('SERVER_ONLY')
     const { data: history, error: rpcErr } = await admin.rpc(
       'relocate_equipment_for_pm',
       {

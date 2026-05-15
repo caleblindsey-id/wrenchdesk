@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 import type { PartEntry, ProductResult } from './TicketActions'
 
 // ──────────────────────────────────────────────
@@ -58,11 +59,16 @@ function handlePartSearch(
     })
 
     const supabase = createClient()
-    const q = value.trim()
+    // Sanitize before splicing into .or() — see lib/db/safe-or. Previously
+    // this call site missed sanitization entirely.
+    const q = sanitizeOrValue(value.trim())
     const { data } = await supabase
       .from('products')
       .select('id, synergy_id, number, description, unit_price')
-      .or(`number.ilike.%${q}%,description.ilike.%${q}%`)
+      .or(safeOrRaw([
+        { column: 'number', op: 'ilike', raw: `%${q}%` },
+        { column: 'description', op: 'ilike', raw: `%${q}%` },
+      ]))
       .order('number')
       .limit(25)
 

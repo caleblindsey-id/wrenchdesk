@@ -58,7 +58,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update.' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
+    const supabase = await createAdminClient('ADMIN_ONLY')
     const { error } = await supabase
       .from('customers')
       .update({ ...update, updated_by_id: user.id })

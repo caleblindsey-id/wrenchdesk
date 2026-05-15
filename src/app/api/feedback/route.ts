@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       attachmentPath = raw.attachment_path
     }
 
-    const supabase = createAdminClient()
+    const supabase = await createAdminClient('SERVER_ONLY')
 
     const { data, error } = await supabase
       .from('feedback_submissions')

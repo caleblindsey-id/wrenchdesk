@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 
 // ── Types (shared with ServiceTicketDetail) ──
 
@@ -150,13 +151,15 @@ export default function PartsEntryList({ parts, setParts, showPricing, showWarra
       })
 
       const supabase = createClient()
-      // Strip PostgREST-significant chars from the query before injecting
-      // into the .or() filter — commas/parens are filter-syntax separators.
-      const q = value.trim().replace(/[,()]/g, ' ')
+      // Sanitize before splicing into .or() — see lib/db/safe-or.
+      const q = sanitizeOrValue(value.trim())
       const { data } = await supabase
         .from('products')
         .select('id, synergy_id, number, description, unit_price')
-        .or(`number.ilike.%${q}%,description.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'number', op: 'ilike', raw: `%${q}%` },
+          { column: 'description', op: 'ilike', raw: `%${q}%` },
+        ]))
         .order('number')
         .limit(10)
 

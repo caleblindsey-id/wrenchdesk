@@ -33,13 +33,17 @@ function generateTempPassword(): string {
 
 export async function POST(request: NextRequest) {
   let createdAuthUserId: string | null = null
-  const admin = createAdminClient()
+  // Hoisted so the catch block can use it for rollback; assigned only after
+  // the role check passes (the wrapper itself also re-validates ADMIN_ONLY).
+  let admin: Awaited<ReturnType<typeof createAdminClient>> | null = null
 
   try {
     const currentUser = await getCurrentUser()
     if (!currentUser?.role || !ADMIN_ROLES.includes(currentUser.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+
+    admin = await createAdminClient('ADMIN_ONLY')
 
     const body = await request.json() as { name?: string; email?: string; role?: UserRole }
     const { name, email, role } = body
@@ -80,7 +84,8 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertError) {
-      await admin.auth.admin.deleteUser(authData.user.id)
+      // admin is non-null here — we set it above before any error path.
+      await admin!.auth.admin.deleteUser(authData.user.id)
       createdAuthUserId = null
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (err) {
-    if (createdAuthUserId) {
+    if (createdAuthUserId && admin) {
       try {
         await admin.auth.admin.deleteUser(createdAuthUserId)
       } catch (rollbackErr) {

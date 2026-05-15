@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 import CreditHoldBadge from '@/components/CreditHoldBadge'
 import type { EquipmentRow, UserRow, ContactRow, ShipToLocationRow } from '@/types/database'
 import type { ServiceTicketType, ServiceBillingType, ServicePriority } from '@/types/service-tickets'
@@ -101,12 +102,15 @@ export function CreateServiceTicketForm() {
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       const supabase = createClient()
-      // Strip PostgREST filter-syntax chars before injecting into .or()
-      const q = customerSearch.trim().replace(/[,()]/g, ' ')
+      // Sanitize before splicing into .or() — see lib/db/safe-or.
+      const q = sanitizeOrValue(customerSearch.trim())
       const { data } = await supabase
         .from('customers')
         .select('id, name, account_number, credit_hold')
-        .or(`name.ilike.%${q}%,account_number.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'name', op: 'ilike', raw: `%${q}%` },
+          { column: 'account_number', op: 'ilike', raw: `%${q}%` },
+        ]))
         .eq('active', true)
         .order('name')
         .limit(25)

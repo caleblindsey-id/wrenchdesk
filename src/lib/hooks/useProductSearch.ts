@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 
 /**
  * Shape returned by the products combobox search.
@@ -64,12 +65,15 @@ export function useProductSearch(): UseProductSearchReturn {
     debounceRef.current = setTimeout(async () => {
       setLoading(true)
       const supabase = createClient()
-      // Strip PostgREST filter-syntax chars before injecting into .or().
-      const q = query.trim().replace(/[,()]/g, ' ')
+      // Sanitize before splicing into .or() — see lib/db/safe-or.
+      const q = sanitizeOrValue(query.trim())
       const { data } = await supabase
         .from('products')
         .select('id, synergy_id, number, description')
-        .or(`number.ilike.%${q}%,description.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'number', op: 'ilike', raw: `%${q}%` },
+          { column: 'description', op: 'ilike', raw: `%${q}%` },
+        ]))
         .order('number')
         .limit(25)
         .returns<ProductSearchResult[]>()

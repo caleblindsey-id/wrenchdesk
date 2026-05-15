@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 import { Check, Pencil } from 'lucide-react'
 
 interface ProductSearchResult {
@@ -40,7 +41,9 @@ export default function PartSynergyPicker({
   // doesn't trigger the react-hooks/set-state-in-effect rule.
   useEffect(() => {
     if (!editing) return
-    const q = search.trim()
+    // Sanitize before splicing into .or() — see lib/db/safe-or. Previously
+    // this call site missed sanitization entirely.
+    const q = sanitizeOrValue(search.trim())
     if (!q) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
@@ -49,7 +52,10 @@ export default function PartSynergyPicker({
       const { data } = await supabase
         .from('products')
         .select('id, synergy_id, number, description')
-        .or(`number.ilike.%${q}%,description.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'number', op: 'ilike', raw: `%${q}%` },
+          { column: 'description', op: 'ilike', raw: `%${q}%` },
+        ]))
         .order('number')
         .limit(10)
       setResults((data as ProductSearchResult[]) ?? [])
