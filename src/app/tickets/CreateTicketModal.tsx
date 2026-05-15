@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 import { EquipmentRow, UserRow } from '@/types/database'
 import { X } from 'lucide-react'
 import CreditHoldBadge from '@/components/CreditHoldBadge'
@@ -72,11 +73,17 @@ export default function CreateTicketModal({ open, onClose }: CreateTicketModalPr
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       const supabase = createClient()
-      const q = customerSearch.trim()
+      // Sanitize before splicing into .or() — see lib/db/safe-or. Previously this
+      // call site was missing sanitization entirely; a `,` or `(` in the search
+      // box would have let the user inject extra clauses.
+      const q = sanitizeOrValue(customerSearch.trim())
       const { data } = await supabase
         .from('customers')
         .select('id, name, account_number, credit_hold')
-        .or(`name.ilike.%${q}%,account_number.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'name', op: 'ilike', raw: `%${q}%` },
+          { column: 'account_number', op: 'ilike', raw: `%${q}%` },
+        ]))
         .order('name')
         .limit(25)
       setCustomerResults((data as CustomerOption[]) ?? [])

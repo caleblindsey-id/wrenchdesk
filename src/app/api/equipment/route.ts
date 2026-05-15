@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const normalizedSerial = normalizeSerial(serialRaw)
     const shipToIdNum = intOrNull('ship_to_location_id')
 
-    const supabase = createAdminClient()
+    const supabase = await createAdminClient('ADMIN_ONLY')
 
     // Validate ship_to_location belongs to the same customer (prevents cross-customer location tagging)
     if (shipToIdNum !== null) {

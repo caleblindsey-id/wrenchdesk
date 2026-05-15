@@ -85,7 +85,7 @@ export async function PATCH(
 
     update.updated_by_id = user.id
 
-    const admin = createAdminClient()
+    const admin = await createAdminClient('ADMIN_ONLY')
     const { data, error } = await admin
       .from('sales_reps')
       .update(update)
@@ -121,7 +121,7 @@ export async function DELETE(
     }
 
     const { id } = await params
-    const admin = createAdminClient()
+    const admin = await createAdminClient('ADMIN_ONLY')
     const { error } = await admin
       .from('sales_reps')
       .delete()

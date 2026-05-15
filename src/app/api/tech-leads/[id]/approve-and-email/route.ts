@@ -112,7 +112,7 @@ export async function POST(
 
     // Sign 7-day URLs for any attached machine photos. Service-role client
     // bypasses the storage RLS that would otherwise block manager reads.
-    const admin = createAdminClient()
+    const admin = await createAdminClient('ADMIN_ONLY')
     const photos = (lead.photos ?? []) as TicketPhoto[]
     const signedPhotoUrls: string[] = []
     for (const p of photos) {

@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, MANAGER_ROLES } from '@/lib/auth'
-
-// PostgREST `.or()` parses commas as clause separators and parens as grouping;
-// either character in user input lets the caller inject extra filters.
-// Strip them before interpolation. (See feedback memory: postgrest-or-comma-injection.)
-function sanitizeForOr(q: string): string {
-  return q.replace(/[,()*%]/g, '').trim()
-}
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,7 +13,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const q = sanitizeForOr(request.nextUrl.searchParams.get('q') ?? '').slice(0, 64)
+    const q = sanitizeOrValue(request.nextUrl.searchParams.get('q') ?? '').trim().slice(0, 64)
     if (!q) {
       return NextResponse.json({ results: [] })
     }
@@ -29,8 +23,11 @@ export async function GET(request: NextRequest) {
     // Numeric q: also match exact vendor code (the int PK).
     const numeric = /^\d+$/.test(q)
     const filter = numeric
-      ? `name.ilike.%${q}%,code.eq.${Number(q)}`
-      : `name.ilike.%${q}%`
+      ? safeOrRaw([
+          { column: 'name', op: 'ilike', raw: `%${q}%` },
+          { column: 'code', op: 'eq', raw: String(Number(q)) },
+        ])
+      : safeOrRaw([{ column: 'name', op: 'ilike', raw: `%${q}%` }])
 
     const { data, error } = await supabase
       .from('vendors')

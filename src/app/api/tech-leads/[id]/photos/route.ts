@@ -75,7 +75,7 @@ export async function PATCH(
     // technicians an UPDATE policy on their own row (intentional: status
     // transitions go through the manager-only /update route). The route
     // has already enforced the ownership check above.
-    const admin = createAdminClient()
+    const admin = await createAdminClient('SERVER_ONLY')
     const { error: writeErr } = await admin
       .from('tech_leads')
       .update({ photos: merged })

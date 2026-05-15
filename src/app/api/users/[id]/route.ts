@@ -60,7 +60,7 @@ export async function PATCH(
 
     update.updated_by_id = currentUser.id
 
-    const admin = createAdminClient()
+    const admin = await createAdminClient('ADMIN_ONLY')
     const { data: user, error } = await admin
       .from('users')
       .update(update)

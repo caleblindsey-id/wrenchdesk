@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 import { X } from 'lucide-react'
 import type { BillingType, TechLeadFrequency } from '@/types/database'
 import type { TechLeadWithJoins } from '@/lib/db/tech-leads'
@@ -120,12 +121,15 @@ export default function CreateEquipmentFromLeadModal({ lead, onClose, onDone }: 
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       const supabase = createClient()
-      // Strip PostgREST filter-syntax chars before injecting into .or().
-      const q = customerSearch.trim().replace(/[,()]/g, ' ')
+      // Sanitize before splicing into .or() — see lib/db/safe-or.
+      const q = sanitizeOrValue(customerSearch.trim())
       const { data } = await supabase
         .from('customers')
         .select('id, name, account_number')
-        .or(`name.ilike.%${q}%,account_number.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'name', op: 'ilike', raw: `%${q}%` },
+          { column: 'account_number', op: 'ilike', raw: `%${q}%` },
+        ]))
         .order('name')
         .limit(25)
       setCustomerResults((data as CustomerOption[]) ?? [])

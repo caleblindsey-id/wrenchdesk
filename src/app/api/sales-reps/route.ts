@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
     const kind = kindRaw as SalesRepKind
 
-    const admin = createAdminClient()
+    const admin = await createAdminClient('ADMIN_ONLY')
     const { data, error } = await admin
       .from('sales_reps')
       .insert({

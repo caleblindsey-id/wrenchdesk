@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { sanitizeOrValue, safeOrRaw } from '@/lib/db/safe-or'
 import { X, Camera } from 'lucide-react'
 import type { EquipmentSaleTier, TechLeadFrequency, TechLeadType } from '@/types/database'
 import { EQUIPMENT_SALE_TIER_LIST } from '@/lib/tech-leads/bonus-tiers'
@@ -142,12 +143,15 @@ export default function SubmitLeadModal({ open, onClose }: SubmitLeadModalProps)
     debounceRef.current = setTimeout(async () => {
       setSearching(true)
       const supabase = createClient()
-      // Strip PostgREST filter-syntax chars before injecting into .or().
-      const q = customerSearch.trim().replace(/[,()]/g, ' ')
+      // Sanitize before splicing into .or() — see lib/db/safe-or.
+      const q = sanitizeOrValue(customerSearch.trim())
       const { data } = await supabase
         .from('customers')
         .select('id, name, account_number')
-        .or(`name.ilike.%${q}%,account_number.ilike.%${q}%`)
+        .or(safeOrRaw([
+          { column: 'name', op: 'ilike', raw: `%${q}%` },
+          { column: 'account_number', op: 'ilike', raw: `%${q}%` },
+        ]))
         .order('name')
         .limit(25)
       setCustomerResults((data as CustomerOption[]) ?? [])
