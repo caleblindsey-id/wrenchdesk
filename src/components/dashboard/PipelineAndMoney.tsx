@@ -40,11 +40,11 @@ export default function PipelineAndMoney({ techLeads, bonusLeaderboard, estimate
           </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="bg-gray-50 dark:bg-gray-900/50 rounded-md p-2.5">
-              <div className="text-xs text-gray-500 dark:text-gray-400">Pending</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Submitted</div>
               <div className="text-xl font-bold text-gray-900 dark:text-white tabular-nums">{techLeads.pending}</div>
             </div>
             <div className="bg-gray-50 dark:bg-gray-900/50 rounded-md p-2.5">
-              <div className="text-xs text-gray-500 dark:text-gray-400">Approved</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Pending</div>
               <div className="text-xl font-bold text-gray-900 dark:text-white tabular-nums">{techLeads.approved}</div>
             </div>
             <div className="bg-gray-50 dark:bg-gray-900/50 rounded-md p-2.5">

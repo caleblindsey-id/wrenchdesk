@@ -26,15 +26,29 @@ interface Props {
 }
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'pending',     label: 'Pending Leads' },
+  { key: 'pending',     label: 'Submitted Leads' },
   { key: 'pending_ace', label: 'Pending ACE' },
-  { key: 'approved',    label: 'Approved' },
+  { key: 'approved',    label: 'Pending' },
   { key: 'match',       label: 'Match Candidates' },
   { key: 'earned',      label: 'Earned (unpaid)' },
   { key: 'paid',        label: 'Paid' },
   { key: 'closed',      label: 'Rejected / Cancelled / Expired' },
   { key: 'payout',      label: 'Payout Report' },
 ]
+
+// Display label for the per-row status badge. DB enum values stay the same;
+// this just renames the manager-approved-but-awaiting-payout state so
+// "approved" isn't mistaken for "ready to pay".
+const STATUS_LABEL: Record<TechLeadStatus, string> = {
+  pending:       'submitted',
+  approved:      'pending',
+  match_pending: 'match pending',
+  rejected:      'rejected',
+  cancelled:     'cancelled',
+  expired:       'expired',
+  earned:        'earned',
+  paid:          'paid',
+}
 
 function partitionByTab(leads: TechLeadWithJoins[], tab: TabKey): TechLeadWithJoins[] {
   switch (tab) {
@@ -445,7 +459,7 @@ export default function TechPayoutsClient({ leads, candidatesByLead, aceEntries,
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-md text-xs font-medium ${statusBadge(lead.status)}`}>
-                        {lead.status}
+                        {STATUS_LABEL[lead.status]}
                       </span>
                       {(lead.status === 'earned' || lead.status === 'paid') && (
                         <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">

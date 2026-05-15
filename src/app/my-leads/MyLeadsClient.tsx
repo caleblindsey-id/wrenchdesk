@@ -13,8 +13,8 @@ interface Props {
 }
 
 const STATUS_LABEL: Record<TechLeadStatus, string> = {
-  pending: 'Pending review',
-  approved: 'Approved — waiting on match',
+  pending: 'Submitted — awaiting review',
+  approved: 'Pending — waiting on match',
   rejected: 'Rejected',
   cancelled: 'Cancelled',
   earned: 'Earned',
